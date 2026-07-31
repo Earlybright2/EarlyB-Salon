@@ -1,0 +1,15 @@
+"""
+URL configuration for config project.
+
+The `urlpatterns` list routes URLs to views. For more information please see:
+    https://docs.djangoproject.com/en/6.0/topics/http/urls/
+"""
+from django.contrib import admin
+from django.urls import include, path
+
+urlpatterns = [
+    path("admin/", admin.site.urls),
+    path("api/auth/", include("apps.users.urls")),
+    path("api/shop/", include("apps.shop.urls")),
+    path("api/admin/", include("apps.dashboard.urls")),
+]

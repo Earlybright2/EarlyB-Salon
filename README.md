@@ -1,73 +1,67 @@
-# React + TypeScript + Vite
+# EarlyB Salon
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Salon booking and product marketplace platform with a Django REST API backend and a React frontend.
 
-Currently, two official plugins are available:
+## Structure
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- `backend/` — Django 6 + Django REST Framework API (PostgreSQL, JWT cookie auth)
+- `frontend/` — React 19 + Vite + TanStack Query + Tailwind CSS (shadcn/ui)
 
-## React Compiler
+## Backend
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Requirements: Python 3.12+, PostgreSQL.
 
-## Expanding the ESLint configuration
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+# Create a PostgreSQL database and configure via env or backend/.env:
+#   DB_NAME=earlyb_salon  DB_USER=postgres  DB_PASSWORD=...  DB_HOST=localhost  DB_PORT=5432
+#   JWT_SECRET=<random-secret>
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+python manage.py migrate
+python manage.py seed_data   # optional demo data
+python manage.py runserver  # http://localhost:8000
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### Auth endpoints
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- `POST /api/auth/login` — login by `unionId` or `email` (+ password); auto-creates the user
+- `GET /api/auth/me` — current user (session cookie)
+- `POST /api/auth/logout`
+- `POST /api/auth/google` / `POST /api/auth/google/callback`
+- `POST /api/auth/apple` / `POST /api/auth/apple/callback`
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Shop endpoints
+
+- `GET /api/shop/products` / `GET /api/shop/products/<id>`
+- `GET /api/shop/salons` / `GET /api/shop/salons/<id>`
+- `GET /api/shop/services` / `GET /api/shop/services/<id>`
+- `GET /api/shop/hairstyles`
+
+### Admin endpoints (role-gated)
+
+- `GET /api/admin/dashboard`, `/api/admin/platform-stats`, `/api/admin/top-salons`
+- `GET /api/admin/users`, `PATCH /api/admin/users/<id>/role`, `POST /api/admin/users/<id>/suspend`
+- `GET /api/admin/stylists`, `GET /api/admin/kyc/pending`, `POST /api/admin/kyc/<id>/approve`
+- `GET /api/admin/transactions`, `/api/admin/disputes`
+- `GET /api/admin/reviews`, `POST /api/admin/reviews/<id>/moderate`
+
+## Frontend
+
+Requirements: Node 20+.
+
+```bash
+cd frontend
+npm install
+npm run dev   # http://localhost:3000, proxies /api to http://localhost:8000
+```
+
+Production build:
+
+```bash
+npm run build   # outputs to frontend/dist
+npm run check   # type check (tsc -b)
 ```
