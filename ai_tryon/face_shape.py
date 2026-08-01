@@ -1,24 +1,25 @@
 """
-AI Try-On Module — Face Shape Classifier
-Rules-based classifier using landmark geometry ratios.
+AI Try-On Module — Face Shape Classifier (v2.0)
+Rules-based classifier using real MediaPipe 468-point landmark geometry.
 
 Implements section 4, Step 2 of the build spec:
-  - face_length / face_width  → tall vs. round
+  - face_length / face_width   → tall vs. round
   - jaw_width / cheekbone_width → tapered vs. square jaw
-  - forehead_width / jaw_width → heart vs. oblong
+  - forehead_width / jaw_width  → heart vs. oblong
 
-No ML training required — pure geometry on OpenCV face landmarks.
+Uses actual landmark indices (forehead, cheekbones, jaw, chin) instead of
+bounding-box approximations. Pure function — no I/O, easily testable.
 """
 
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import Sequence
 
-from pathlib import Path
-
-import cv2
 import numpy as np
+
+from .landmark_detector import LANDMARK_INDICES, LandmarkResult
 
 
 @dataclass
@@ -28,92 +29,111 @@ class FaceShapeResult:
     ratios: dict             # raw ratio values for debugging / future ML
 
 
-# OpenCV DNN face landmark model (68-point)
-# We use Haar cascade for face detection + a geometric approximation
-# of landmark positions for the ratio-based classifier.
+VALID_SHAPES = frozenset({"OVAL", "ROUND", "SQUARE", "HEART", "DIAMOND", "OBLONG"})
 
 
-
-
-def _distance(p1, p2) -> float:
+def _distance(p1: Sequence[float], p2: Sequence[float]) -> float:
+    """Euclidean distance between two 2D points."""
     return math.hypot(p1[0] - p2[0], p1[1] - p2[1])
 
 
-def _bbox_points(bbox) -> dict:
-    """Extract approximate facial measurement points from a bounding box.
+def _extract_measurements(landmarks_px: np.ndarray) -> dict[str, float]:
+    """Extract facial measurement widths from real landmark pixel coordinates.
 
-    The bbox is (x, y, w, h).  We approximate:
-      - forehead width  ≈ 0.9 * face_width  (upper third)
-      - cheekbone width ≈ face_width        (widest part, middle)
-      - jaw width       ≈ 0.7 * face_width   (lower third, tapered)
-      - face length     ≈ face height
+    Measurements:
+      - forehead_width:  temple-to-temple (landmarks 54 ↔ 284)
+      - cheekbone_width:  cheekbone-to-cheekbone (landmarks 116 ↔ 345)
+      - jaw_width:        jaw-angle-to-jaw-angle (landmarks 172 ↔ 397)
+      - face_length:      forehead-top to chin (landmarks 10 ↔ 152)
     """
-    x, y, w, h = bbox
-    cx = x + w / 2
+    idx = LANDMARK_INDICES
 
-    forehead_w = w * 0.90
-    cheekbone_w = w
-    jaw_w = w * 0.70
-    face_len = h
+    forehead_width = _distance(
+        landmarks_px[idx["forehead_left"]],
+        landmarks_px[idx["forehead_right"]],
+    )
+    cheekbone_width = _distance(
+        landmarks_px[idx["cheekbone_left"]],
+        landmarks_px[idx["cheekbone_right"]],
+    )
+    jaw_width = _distance(
+        landmarks_px[idx["jaw_left"]],
+        landmarks_px[idx["jaw_right"]],
+    )
+    face_length = _distance(
+        landmarks_px[idx["forehead_top"]],
+        landmarks_px[idx["jaw_chin"]],
+    )
 
     return {
-        "forehead_width": forehead_w,
-        "cheekbone_width": cheekbone_w,
-        "jaw_width": jaw_w,
-        "face_length": face_len,
+        "forehead_width": forehead_width,
+        "cheekbone_width": cheekbone_width,
+        "jaw_width": jaw_width,
+        "face_length": face_length,
     }
 
 
-def classify_face_shape(image_bytes: bytes) -> FaceShapeResult | None:
-    """Detect the largest face in *image_bytes* and classify its shape.
+def classify_from_landmarks(landmarks_px: np.ndarray) -> FaceShapeResult:
+    """Classify face shape from MediaPipe landmark pixel coordinates.
 
-    Returns ``None`` when no face is detected.
+    This is the pure, testable function — no I/O, no image decoding.
+    Pass in the landmarks_pixels array from ``LandmarkResult``.
+
+    Args:
+        landmarks_px: numpy array of shape (468, 2) with pixel (x, y) coords.
+
+    Returns:
+        FaceShapeResult with shape, confidence, and raw ratios.
     """
-    nparr = np.frombuffer(image_bytes, np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    if img is None:
-        return None
+    measurements = _extract_measurements(landmarks_px)
 
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-    faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60))
-
-    if len(faces) == 0:
-        return None
-
-    # Pick the largest face
-    face = max(faces, key=lambda f: f[2] * f[3])
-    measurements = _bbox_points(tuple(face))
-
-    fl = measurements["face_length"]
-    fw = measurements["cheekbone_width"]
+    fw = measurements["forehead_width"]
+    cw = measurements["cheekbone_width"]
     jw = measurements["jaw_width"]
-    fhw = measurements["forehead_width"]
+    fl = measurements["face_length"]
 
-    ratio_len_width = fl / fw if fw else 0
-    ratio_jaw_cheek = jw / fw if fw else 0
-    ratio_forehead_jaw = fhw / jw if jw else 0
+    # Guard against division by zero
+    eps = 1e-6
 
-    # Decision tree (section 4, Step 2 of the build spec)
+    ratio_len_width = fl / max(cw, eps)           # face_length / cheekbone_width
+    ratio_jaw_cheek = jw / max(cw, eps)             # jaw_width / cheekbone_width
+    ratio_forehead_jaw = fw / max(jw, eps)          # forehead_width / jaw_width
+
+    # ─── Decision tree (section 4, Step 2 of the build spec) ───────
+    #
+    # The thresholds are based on standard facial proportion literature.
+    # Confidence is derived from how far the ratio is from the boundary.
+
     shape = "OVAL"
-    confidence = 0.5
+    confidence = 0.70
 
     if ratio_len_width > 1.5:
+        # Face is notably taller than wide → oblong
         shape = "OBLONG"
-        confidence = min(0.95, 0.55 + (ratio_len_width - 1.5) * 0.3)
+        confidence = min(0.95, 0.60 + (ratio_len_width - 1.5) * 0.35)
+
     elif ratio_len_width < 1.1:
+        # Face is nearly as wide as it is tall → round
         shape = "ROUND"
-        confidence = min(0.95, 0.55 + (1.1 - ratio_len_width) * 0.3)
+        confidence = min(0.95, 0.60 + (1.1 - ratio_len_width) * 0.35)
+
     elif ratio_jaw_cheek > 0.85:
+        # Jaw is nearly as wide as cheekbones → square
         shape = "SQUARE"
-        confidence = min(0.95, 0.55 + (ratio_jaw_cheek - 0.85) * 0.3)
+        confidence = min(0.95, 0.60 + (ratio_jaw_cheek - 0.85) * 0.35)
+
     elif ratio_forehead_jaw > 1.35:
+        # Forehead significantly wider than jaw → heart
         shape = "HEART"
-        confidence = min(0.95, 0.55 + (ratio_forehead_jaw - 1.35) * 0.3)
+        confidence = min(0.95, 0.60 + (ratio_forehead_jaw - 1.35) * 0.35)
+
     elif ratio_jaw_cheek < 0.62:
+        # Jaw significantly narrower than cheekbones → diamond
         shape = "DIAMOND"
-        confidence = min(0.95, 0.55 + (0.62 - ratio_jaw_cheek) * 0.3)
+        confidence = min(0.95, 0.60 + (0.62 - ratio_jaw_cheek) * 0.35)
+
     else:
+        # Balanced proportions → oval
         shape = "OVAL"
         confidence = 0.75
 
@@ -126,3 +146,19 @@ def classify_face_shape(image_bytes: bytes) -> FaceShapeResult | None:
             "forehead_jaw": round(ratio_forehead_jaw, 3),
         },
     )
+
+
+def classify_face_shape(image_bytes: bytes) -> FaceShapeResult | None:
+    """Detect the face in *image_bytes* via MediaPipe and classify its shape.
+
+    Returns ``None`` when no face is detected.
+    This is the server-side fallback path — the frontend can also run
+    MediaPipe client-side and call ``classify_from_landmarks`` directly.
+    """
+    from .landmark_detector import detect_landmarks
+
+    result = detect_landmarks(image_bytes)
+    if result is None:
+        return None
+
+    return classify_from_landmarks(result.landmarks_pixels)
