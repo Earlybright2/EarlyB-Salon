@@ -52,9 +52,16 @@ class Settings(BaseSettings):
     upload_dir: str = ""
     result_quality: int = 90
 
+    # ─── CORS ───────────────────────────────────────────────────
+    cors_origins: str = "http://localhost:5173,http://localhost:3000,http://localhost:8001"
+
     # ─── Observability ─────────────────────────────────────────
     log_level: str = "INFO"
     request_id_header: str = "X-Request-ID"
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
     @property
     def supabase_rest_url(self) -> str:

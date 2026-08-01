@@ -17,11 +17,9 @@ Endpoints:
 
 from __future__ import annotations
 
-import io
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
 
 import cv2
 import numpy as np
@@ -86,10 +84,10 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "Authorization", settings.request_id_header],
 )
 
 BASE_DIR = Path(__file__).resolve().parent
