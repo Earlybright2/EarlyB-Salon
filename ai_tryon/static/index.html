@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Early Bright — AI Try-On</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0A0A0F;
+      --bg-card: #111118;
+      --bg-elevated: #1A1A26;
+      --text: #F5F5F0;
+      --text-secondary: #A0A0B0;
+      --text-muted: #606075;
+      --gold: #D4AF37;
+      --gold-light: #F0CC5C;
+      --teal: #14B8A6;
+      --rose: #E879A0;
+      --success: #22C55E;
+      --warning: #F59E0B;
+      --error: #EF4444;
+      --border: rgba(212, 175, 55, 0.15);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Outfit', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    h1, h2, h3, h4 {
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 1.5rem; }
+
+    /* Header */
+    header {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(10, 10, 15, 0.95);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 0;
+    }
+    .header-inner { display: flex; align-items: center; justify-content: space-between; }
+    .logo { display: flex; align-items: center; gap: 0.5rem; font-size: 1.5rem; }
+    .logo span { color: var(--gold); }
+    .logo-icon { color: var(--gold); font-size: 1.5rem; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.3rem 0.8rem; border-radius: 999px;
+      background: rgba(212, 175, 55, 0.1); border: 1px solid rgba(212, 175, 55, 0.2);
+      font-size: 0.8rem; color: var(--gold); font-weight: 500;
+    }
+
+    /* Hero */
+    .hero { text-align: center; padding: 3rem 0 2rem; }
+    .hero h1 { font-size: clamp(2rem, 5vw, 3.5rem); margin-bottom: 1rem; }
+    .hero h1 .gradient {
+      background: linear-gradient(135deg, #D4AF37, #F0CC5C);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p { color: var(--text-secondary); max-width: 36rem; margin: 0 auto; font-size: 1.1rem; }
+
+    /* Steps indicator */
+    .steps { display: flex; justify-content: center; gap: 1rem; margin: 2rem 0; flex-wrap: wrap; }
+    .step {
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.5rem 1rem; border-radius: 999px;
+      background: var(--bg-card); border: 1px solid rgba(255,255,255,0.05);
+      font-size: 0.85rem; color: var(--text-muted);
+      transition: all 0.3s;
+    }
+    .step.active { border-color: rgba(212, 175, 55, 0.3); color: var(--gold); background: rgba(212, 175, 55, 0.05); }
+    .step.done { color: var(--success); border-color: rgba(34, 197, 94, 0.2); }
+    .step-num {
+      width: 24px; height: 24px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: 600;
+      background: rgba(255,255,255,0.05); color: var(--text-muted);
+    }
+    .step.active .step-num { background: var(--gold); color: var(--bg); }
+    .step.done .step-num { background: var(--success); color: var(--bg); }
+
+    /* Upload zone */
+    .upload-zone {
+      max-width: 600px; margin: 0 auto;
+      border: 2px dashed rgba(212, 175, 55, 0.3);
+      border-radius: 1.5rem; padding: 3rem 2rem; text-align: center;
+      background: var(--bg-card); transition: all 0.3s; cursor: pointer;
+    }
+    .upload-zone:hover { border-color: rgba(212, 175, 55, 0.5); background: rgba(212, 175, 55, 0.02); }
+    .upload-zone.dragover { border-color: var(--gold); background: rgba(212, 175, 55, 0.05); }
+    .upload-icon {
+      width: 80px; height: 80px; border-radius: 50%;
+      background: rgba(212, 175, 55, 0.1);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 1.5rem; font-size: 2.5rem; color: var(--gold);
+    }
+    .upload-zone h3 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    .upload-zone p { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.75rem 1.5rem; border-radius: 0.75rem;
+      font-weight: 600; font-size: 0.95rem; cursor: pointer;
+      border: none; transition: all 0.3s; text-decoration: none;
+    }
+    .btn-gold {
+      background: linear-gradient(135deg, #D4AF37, #F0CC5C);
+      color: var(--bg);
+    }
+    .btn-gold:hover { box-shadow: 0 8px 24px rgba(212, 175, 55, 0.35); transform: translateY(-1px); }
+    .btn-outline {
+      background: transparent; border: 1px solid rgba(212, 175, 55, 0.3);
+      color: var(--gold);
+    }
+    .btn-outline:hover { background: rgba(212, 175, 55, 0.1); }
+    .btn-teal { background: var(--teal); color: white; }
+    .btn-teal:hover { background: #2DD4BF; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+
+    /* Scanning */
+    .scanning { text-align: center; max-width: 500px; margin: 0 auto; }
+    .scanning img { width: 100%; max-width: 400px; border-radius: 1.5rem; opacity: 0.5; }
+    .spinner {
+      width: 64px; height: 64px; border-radius: 50%;
+      border: 4px solid rgba(212, 175, 55, 0.2);
+      border-top-color: var(--gold);
+      animation: spin 1s linear infinite;
+      margin: 1.5rem auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Results layout */
+    .results-layout {
+      display: grid; grid-template-columns: 1fr 380px; gap: 2rem;
+      margin-top: 1.5rem;
+    }
+    @media (max-width: 900px) { .results-layout { grid-template-columns: 1fr; } }
+
+    .preview-container {
+      position: relative; border-radius: 1.5rem; overflow: hidden;
+      background: var(--bg-card); border: 1px solid rgba(255,255,255,0.05);
+    }
+    .preview-container img { width: 100%; display: block; }
+    .face-shape-badge {
+      position: absolute; bottom: 1rem; left: 1rem;
+      background: rgba(10, 10, 15, 0.85); backdrop-filter: blur(20px);
+      border: 1px solid rgba(212, 175, 55, 0.2); border-radius: 0.75rem;
+      padding: 0.6rem 1rem;
+    }
+    .face-shape-badge .label { font-size: 0.7rem; color: var(--text-muted); }
+    .face-shape-badge .value { font-size: 0.95rem; color: var(--gold); font-weight: 600; }
+    .hairstyle-badge {
+      position: absolute; top: 1rem; right: 1rem;
+      background: rgba(10, 10, 15, 0.85); backdrop-filter: blur(20px);
+      border: 1px solid rgba(20, 184, 166, 0.2); border-radius: 0.75rem;
+      padding: 0.6rem 1rem;
+    }
+    .hairstyle-badge .label { font-size: 0.7rem; color: var(--text-muted); }
+    .hairstyle-badge .value { font-size: 0.95rem; color: var(--teal); font-weight: 600; }
+
+    /* Hairstyle selector */
+    .sidebar-panel {
+      background: var(--bg-card); border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 1.5rem; padding: 1.5rem; max-height: 600px; overflow-y: auto;
+    }
+    .sidebar-panel h3 { font-size: 1.2rem; margin-bottom: 1rem; }
+    .filter-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .filter-chip {
+      padding: 0.35rem 0.75rem; border-radius: 999px;
+      background: var(--bg-elevated); border: 1px solid rgba(255,255,255,0.05);
+      font-size: 0.8rem; color: var(--text-secondary); cursor: pointer;
+      transition: all 0.2s;
+    }
+    .filter-chip:hover { border-color: rgba(212, 175, 55, 0.2); }
+    .filter-chip.active { background: var(--gold); color: var(--bg); border-color: var(--gold); }
+
+    .hairstyle-item {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.75rem; border-radius: 0.75rem; margin-bottom: 0.5rem;
+      background: var(--bg); border: 1px solid rgba(255,255,255,0.05);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .hairstyle-item:hover { border-color: rgba(255,255,255,0.1); }
+    .hairstyle-item.selected {
+      background: rgba(212, 175, 55, 0.08); border-color: rgba(212, 175, 55, 0.3);
+    }
+    .hairstyle-item img {
+      width: 48px; height: 48px; border-radius: 0.5rem; object-fit: cover;
+      background: var(--bg-elevated);
+    }
+    .hairstyle-item .info { flex: 1; min-width: 0; }
+    .hairstyle-item .name { font-size: 0.85rem; font-weight: 500; color: var(--text); }
+    .hairstyle-item .meta { font-size: 0.7rem; color: var(--text-muted); }
+    .hairstyle-item .check { color: var(--gold); }
+
+    /* Analysis card */
+    .analysis-card {
+      background: var(--bg-card); border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 1.5rem; padding: 1.5rem; margin-bottom: 1.5rem;
+    }
+    .analysis-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0.75rem 1rem; border-radius: 0.75rem; background: var(--bg);
+      margin-bottom: 0.5rem;
+    }
+    .analysis-row .label { font-size: 0.85rem; color: var(--text-secondary); }
+    .analysis-row .value { font-size: 0.85rem; font-weight: 600; }
+
+    /* Action bar */
+    .action-bar { display: flex; gap: 0.75rem; margin-top: 1.5rem; flex-wrap: wrap; }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%);
+      padding: 0.75rem 1.5rem; border-radius: 0.75rem;
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      color: var(--text); font-size: 0.9rem; z-index: 200;
+      opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+    .toast.success { border-color: rgba(34, 197, 94, 0.3); color: var(--success); }
+    .toast.error { border-color: rgba(239, 68, 68, 0.3); color: var(--error); }
+
+    /* History */
+    .history-section { margin-top: 3rem; }
+    .history-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
+    .history-card {
+      background: var(--bg-card); border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 1rem; overflow: hidden; transition: all 0.3s;
+    }
+    .history-card:hover { border-color: rgba(212, 175, 55, 0.15); }
+    .history-card img { width: 100%; height: 160px; object-fit: cover; }
+    .history-card .body { padding: 0.75rem; }
+    .history-card .name { font-size: 0.85rem; font-weight: 500; }
+    .history-card .meta { font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem; }
+
+    .hidden { display: none !important; }
+    .fade-in { animation: fadeIn 0.4s ease-out forwards; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container header-inner">
+      <div class="logo">
+        <span class="logo-icon">✦</span>
+        <span style="font-family:'Cormorant Garamond',serif; font-weight:600;">Early <span>Bright</span></span>
+      </div>
+      <div class="badge">✦ AI-Powered Try-On</div>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- Hero -->
+    <section class="hero">
+      <h1>AI Hairstyle <span class="gradient">Try-On</span></h1>
+      <p>Upload a front-facing photo and our AI will analyze your face shape and show you how different hairstyles look on you — before you book.</p>
+    </section>
+
+    <!-- Steps -->
+    <div class="steps">
+      <div class="step active" id="step1"><span class="step-num">1</span> Upload Photo</div>
+      <div class="step" id="step2"><span class="step-num">2</span> AI Analysis</div>
+      <div class="step" id="step3"><span class="step-num">3</span> Try-On & Save</div>
+    </div>
+
+    <!-- Step 1: Upload -->
+    <div id="upload-section" class="fade-in">
+      <div class="upload-zone" id="upload-zone">
+        <div class="upload-icon">📷</div>
+        <h3>Upload Your Photo</h3>
+        <p>For best results, use a clear front-facing photo with good lighting and your hair pulled back.</p>
+        <input type="file" id="file-input" accept="image/*" style="display:none;" />
+        <button class="btn btn-gold" onclick="document.getElementById('file-input').click()">Choose Photo</button>
+        <p style="font-size:0.75rem; color:var(--text-muted); margin-top:1rem;">PNG, JPG up to 10MB. Your photo is processed securely.</p>
+      </div>
+    </div>
+
+    <!-- Step 2: Scanning -->
+    <div id="scanning-section" class="hidden">
+      <div class="scanning">
+        <img id="scan-preview" src="" alt="Your photo" />
+        <div class="spinner"></div>
+        <h3>Analyzing Your Features...</h3>
+        <p style="color:var(--text-muted);">Detecting face shape, skin tone, and hairline</p>
+      </div>
+    </div>
+
+    <!-- Step 3: Results -->
+    <div id="results-section" class="hidden">
+      <div class="results-layout">
+        <!-- Preview -->
+        <div>
+          <div class="preview-container">
+            <img id="result-preview" src="" alt="Try-on result" />
+            <div class="face-shape-badge">
+              <div class="label">Face Shape</div>
+              <div class="value" id="face-shape-display">—</div>
+            </div>
+            <div class="hairstyle-badge">
+              <div class="label">Hairstyle</div>
+              <div class="value" id="hairstyle-display">—</div>
+            </div>
+          </div>
+          <div class="action-bar">
+            <button class="btn btn-gold" id="save-btn">💾 Save This Look</button>
+            <button class="btn btn-teal" id="book-btn">📅 Book This Look</button>
+            <button class="btn btn-outline" id="reset-btn">↻ Try Another Photo</button>
+          </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div>
+          <div class="analysis-card">
+            <h3>Your Analysis</h3>
+            <div class="analysis-row">
+              <span class="label">Face Shape</span>
+              <span class="value" style="color:var(--gold);" id="analysis-shape">—</span>
+            </div>
+            <div class="analysis-row">
+              <span class="label">Confidence</span>
+              <span class="value" style="color:var(--teal);" id="analysis-confidence">—</span>
+            </div>
+            <div class="analysis-row">
+              <span class="label">Length/Width</span>
+              <span class="value" style="color:var(--text-secondary);" id="analysis-ratio1">—</span>
+            </div>
+          </div>
+
+          <div class="sidebar-panel">
+            <h3>Choose a Hairstyle</h3>
+            <div class="filter-bar" id="filter-bar">
+              <span class="filter-chip active" data-filter="all">All</span>
+              <span class="filter-chip" data-filter="Braids">Braids</span>
+              <span class="filter-chip" data-filter="Fade">Fade</span>
+              <span class="filter-chip" data-filter="Natural">Natural</span>
+              <span class="filter-chip" data-filter="Styling">Styling</span>
+            </div>
+            <div id="hairstyle-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- History -->
+    <section class="history-section">
+      <h2 style="margin-bottom:1rem;">Saved <span style="color:var(--gold);">Looks</span></h2>
+      <div class="history-grid" id="history-grid">
+        <p style="color:var(--text-muted);">No saved looks yet. Try on a hairstyle and save it!</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    let uploadedFile = null;
+    let faceShape = null;
+    let hairstyles = [];
+    let selectedHairstyle = null;
+    let currentResultUrl = null;
+    let activeFilter = 'all';
+
+    const $ = (id) => document.getElementById(id);
+
+    // ─── Step management ───
+    function setStep(n) {
+      for (let i = 1; i <= 3; i++) {
+        const el = $(`step${i}`);
+        el.classList.remove('active', 'done');
+        if (i < n) el.classList.add('done');
+        else if (i === n) el.classList.add('active');
+      }
+    }
+
+    function showSection(id) {
+      ['upload-section', 'scanning-section', 'results-section'].forEach(s => $(s).classList.add('hidden'));
+      $(id).classList.remove('hidden');
+      $(id).classList.add('fade-in');
+    }
+
+    // ─── Toast ───
+    function toast(msg, type = '') {
+      const t = $('toast');
+      t.textContent = msg;
+      t.className = `toast show ${type}`;
+      setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    // ─── File upload ───
+    const uploadZone = $('upload-zone');
+    const fileInput = $('file-input');
+
+    uploadZone.addEventListener('click', () => fileInput.click());
+    uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+    uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+    uploadZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadZone.classList.remove('dragover');
+      if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files[0]) handleFile(e.target.files[0]);
+    });
+
+    function handleFile(file) {
+      if (!file.type.startsWith('image/')) { toast('Please upload an image file.', 'error'); return; }
+      uploadedFile = file;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        $('scan-preview').src = e.target.result;
+        startAnalysis();
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // ─── Analysis ───
+    async function startAnalysis() {
+      setStep(2);
+      showSection('scanning-section');
+
+      const formData = new FormData();
+      formData.append('photo', uploadedFile);
+
+      try {
+        const resp = await fetch('/ai/try-on/analyze', { method: 'POST', body: formData });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.detail || 'Analysis failed.');
+        }
+        const data = await resp.json();
+        faceShape = data.face_shape;
+
+        $('analysis-shape').textContent = faceShape;
+        $('analysis-confidence').textContent = `${Math.round(data.confidence * 100)}%`;
+        $('analysis-ratio1').textContent = data.ratios.face_length_width?.toFixed(2) || '—';
+        $('face-shape-display').textContent = `${faceShape} ✓`;
+
+        await loadHairstyles();
+        setStep(3);
+        showSection('results-section');
+        toast('Face shape detected: ' + faceShape, 'success');
+      } catch (err) {
+        toast(err.message, 'error');
+        setStep(1);
+        showSection('upload-section');
+      }
+    }
+
+    // ─── Load hairstyles ───
+    async function loadHairstyles() {
+      try {
+        const resp = await fetch(`/ai/hairstyles`);
+        hairstyles = await resp.json();
+        renderHairstyleList();
+      } catch (err) {
+        toast('Failed to load hairstyles.', 'error');
+      }
+    }
+
+    function renderHairstyleList() {
+      const list = $('hairstyle-list');
+      const filtered = activeFilter === 'all'
+        ? hairstyles
+        : hairstyles.filter(h => h.category === activeFilter);
+
+      list.innerHTML = filtered.map(h => `
+        <div class="hairstyle-item ${selectedHairstyle?.id === h.id ? 'selected' : ''}" data-id="${h.id}">
+          <img src="/static/hairstyles/${h.asset_url.split('/').pop()}" alt="${h.name}" />
+          <div class="info">
+            <div class="name">${h.name}</div>
+            <div class="meta">${h.category} · ${h.gender_target}</div>
+          </div>
+          ${selectedHairstyle?.id === h.id ? '<span class="check">✓</span>' : ''}
+        </div>
+      `).join('');
+
+      list.querySelectorAll('.hairstyle-item').forEach(el => {
+        el.addEventListener('click', () => selectHairstyle(el.dataset.id));
+      });
+    }
+
+    // ─── Filter chips ───
+    $('filter-bar').addEventListener('click', (e) => {
+      const chip = e.target.closest('.filter-chip');
+      if (!chip) return;
+      document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      activeFilter = chip.dataset.filter;
+      renderHairstyleList();
+    });
+
+    // ─── Select & render hairstyle ───
+    async function selectHairstyle(id) {
+      selectedHairstyle = hairstyles.find(h => h.id === id);
+      if (!selectedHairstyle) return;
+
+      $('hairstyle-display').textContent = selectedHairstyle.name;
+      renderHairstyleList();
+
+      // Render overlay
+      const formData = new FormData();
+      formData.append('photo', uploadedFile);
+      formData.append('hairstyle_id', id);
+
+      try {
+        const resp = await fetch('/ai/try-on/render', { method: 'POST', body: formData });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.detail || 'Rendering failed.');
+        }
+        const data = await resp.json();
+        currentResultUrl = data.result_url;
+        $('result-preview').src = data.result_url;
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    }
+
+    // ─── Save ───
+    $('save-btn').addEventListener('click', async () => {
+      if (!currentResultUrl || !selectedHairstyle) { toast('Please select a hairstyle first.', 'error'); return; }
+
+      const formData = new FormData();
+      formData.append('hairstyle_id', selectedHairstyle.id);
+      formData.append('result_image_url', currentResultUrl);
+      formData.append('face_shape', faceShape || 'UNKNOWN');
+
+      try {
+        const resp = await fetch('/ai/try-on/save', { method: 'POST', body: formData });
+        if (!resp.ok) throw new Error('Save failed.');
+        toast('Look saved successfully!', 'success');
+        loadHistory();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    });
+
+    // ─── Book ───
+    $('book-btn').addEventListener('click', () => {
+      if (!selectedHairstyle) { toast('Please select a hairstyle first.', 'error'); return; }
+      toast(`Booking "${selectedHairstyle.name}" — connecting you to a verified stylist...`, 'success');
+    });
+
+    // ─── Reset ───
+    $('reset-btn').addEventListener('click', () => {
+      uploadedFile = null;
+      faceShape = null;
+      selectedHairstyle = null;
+      currentResultUrl = null;
+      setStep(1);
+      showSection('upload-section');
+    });
+
+    // ─── History ───
+    async function loadHistory() {
+      try {
+        const resp = await fetch('/ai/try-on/history');
+        const data = await resp.json();
+        const grid = $('history-grid');
+        if (!data || data.length === 0) {
+          grid.innerHTML = '<p style="color:var(--text-muted);">No saved looks yet. Try on a hairstyle and save it!</p>';
+          return;
+        }
+        grid.innerHTML = data.map(r => `
+          <div class="history-card">
+            <img src="${r.result_image_url}" alt="${r.hairstyles?.name || 'Try-on'}" />
+            <div class="body">
+              <div class="name">${r.hairstyles?.name || 'Unknown'}</div>
+              <div class="meta">${r.face_shape || '—'} · ${new Date(r.created_at).toLocaleDateString()}</div>
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        // History is optional — don't show error
+      }
+    }
+
+    // Load history on page load
+    loadHistory();
+  </script>
+</body>
+</html>
