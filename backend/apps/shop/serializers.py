@@ -1,14 +1,27 @@
+import json
+
 from rest_framework import serializers
 
 from apps.shop.models import (
     Appointment,
     Hairstyle,
+    Hero,
     Product,
     Review,
     Salon,
     Service,
     Stylist,
 )
+
+
+def _parse_list(value):
+    if not value:
+        return []
+    try:
+        parsed = json.loads(value)
+        return parsed if isinstance(parsed, list) else [str(parsed)]
+    except (ValueError, TypeError):
+        return [item.strip() for item in value.split(",")]
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -20,6 +33,7 @@ class ProductSerializer(serializers.ModelSerializer):
     isActive = serializers.BooleanField(source="is_active", read_only=True)
     averageRating = serializers.DecimalField(source="average_rating", max_digits=3, decimal_places=2, read_only=True)
     totalReviews = serializers.IntegerField(source="total_reviews", read_only=True)
+    imageUrl = serializers.SerializerMethodField()
     createdAt = serializers.DateTimeField(source="created_at", read_only=True)
 
     class Meta:
@@ -42,10 +56,19 @@ class ProductSerializer(serializers.ModelSerializer):
             "isActive",
             "averageRating",
             "totalReviews",
+            "imageUrl",
             "createdAt",
         ]
 
     usageGuide = serializers.CharField(source="usage_guide", read_only=True)
+
+    def get_imageUrl(self, obj):
+        if obj.image:
+            request = self.context.get("request")
+            if request is not None:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return obj.photos or None
 
 
 class SalonSerializer(serializers.ModelSerializer):
@@ -66,6 +89,7 @@ class SalonSerializer(serializers.ModelSerializer):
     seatCapacity = serializers.IntegerField(source="seat_capacity", read_only=True)
     currentOccupancy = serializers.IntegerField(source="current_occupancy", read_only=True)
     busyPercentage = serializers.IntegerField(source="busy_percentage", read_only=True)
+    imageUrl = serializers.SerializerMethodField()
     createdAt = serializers.DateTimeField(source="created_at", read_only=True)
     updatedAt = serializers.DateTimeField(source="updated_at", read_only=True)
 
@@ -88,6 +112,7 @@ class SalonSerializer(serializers.ModelSerializer):
             "instagramUrl",
             "coverPhoto",
             "logoUrl",
+            "imageUrl",
             "workingHours",
             "isVerified",
             "isActive",
@@ -100,6 +125,14 @@ class SalonSerializer(serializers.ModelSerializer):
             "createdAt",
             "updatedAt",
         ]
+
+    def get_imageUrl(self, obj):
+        if obj.image:
+            request = self.context.get("request")
+            if request is not None:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return obj.cover_photo or obj.logo_url or None
 
 
 class ServiceSerializer(serializers.ModelSerializer):
@@ -132,9 +165,10 @@ class ServiceSerializer(serializers.ModelSerializer):
 class HairstyleSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(read_only=True)
     genderTarget = serializers.CharField(source="gender_target", read_only=True)
-    faceShapes = serializers.CharField(source="face_shapes", read_only=True)
-    hairTypes = serializers.CharField(source="hair_types", read_only=True)
+    faceShapes = serializers.SerializerMethodField()
+    hairTypes = serializers.SerializerMethodField()
     thumbnailUrl = serializers.CharField(source="thumbnail_url", read_only=True)
+    imageUrl = serializers.SerializerMethodField()
     trendScore = serializers.IntegerField(source="trend_score", read_only=True)
     isCelebrity = serializers.BooleanField(source="is_celebrity", read_only=True)
     celebrityName = serializers.CharField(source="celebrity_name", read_only=True)
@@ -150,12 +184,27 @@ class HairstyleSerializer(serializers.ModelSerializer):
             "faceShapes",
             "hairTypes",
             "thumbnailUrl",
+            "imageUrl",
             "trendScore",
             "isCelebrity",
             "celebrityName",
             "tags",
             "createdAt",
         ]
+
+    def get_faceShapes(self, obj):
+        return _parse_list(obj.face_shapes)
+
+    def get_hairTypes(self, obj):
+        return _parse_list(obj.hair_types)
+
+    def get_imageUrl(self, obj):
+        if obj.image:
+            request = self.context.get("request")
+            if request is not None:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return obj.thumbnail_url or None
 
 
 class StylistSerializer(serializers.ModelSerializer):
@@ -234,3 +283,28 @@ class ReviewSerializer(serializers.ModelSerializer):
             "isFeatured",
             "createdAt",
         ]
+
+
+class HeroSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(read_only=True)
+    isActive = serializers.BooleanField(source="is_active", read_only=True)
+    imageUrl = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Hero
+        fields = [
+            "id",
+            "title",
+            "subtitle",
+            "imageUrl",
+            "isActive",
+            "order",
+        ]
+
+    def get_imageUrl(self, obj):
+        if not obj.image:
+            return None
+        request = self.context.get("request")
+        if request is not None:
+            return request.build_absolute_uri(obj.image.url)
+        return obj.image.url

@@ -48,6 +48,7 @@ export interface Product {
   isActive?: boolean;
   averageRating?: string;
   totalReviews?: number;
+  imageUrl?: string | null;
   createdAt?: string;
 }
 
@@ -68,6 +69,7 @@ export interface Salon {
   instagramUrl?: string | null;
   coverPhoto?: string | null;
   logoUrl?: string | null;
+  imageUrl?: string | null;
   workingHours?: Record<string, unknown> | null;
   isVerified?: boolean;
   isActive?: boolean;
@@ -103,6 +105,7 @@ export interface Hairstyle {
   faceShapes?: string | null;
   hairTypes?: string | null;
   thumbnailUrl?: string | null;
+  imageUrl?: string | null;
   trendScore?: number;
   isCelebrity?: boolean;
   celebrityName?: string | null;
@@ -178,4 +181,13 @@ export interface Transaction {
 export interface PlatformStats {
   weeklyBookings: number;
   activeUsers30d: number;
+}
+
+export interface Hero {
+  id: number;
+  title: string;
+  subtitle: string | null;
+  imageUrl: string | null;
+  isActive: boolean;
+  order: number;
 }

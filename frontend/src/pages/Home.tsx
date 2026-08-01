@@ -15,31 +15,107 @@ import {
   Heart,
   ChevronLeft,
   ChevronRight,
-  Scan,
+  ScanFace,
+  CalendarClock,
   CalendarDays,
+  BadgeCheck,
+  Gauge,
+  HeartPulse,
+  Feather,
+  Palette,
+  Wind,
+  Droplets,
+  Scissors,
+  Mail,
+  Send,
+  CheckCircle2,
 } from "lucide-react";
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback, useMemo } from "react";
+import useEmblaCarousel from "embla-carousel-react";
+import { useApiQuery } from "@/hooks/useApi";
+import type { Hairstyle, Hero, Product, Salon } from "@/lib/types";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 const featureIcons: Record<string, React.ReactNode> = {
   Sparkles: <Sparkles className="h-6 w-6" />,
-  Shield: <ShieldCheck className="h-6 w-6" />,
-  TrendingUp: <TrendingUp className="h-6 w-6" />,
-  Users: <Users className="h-6 w-6" />,
+  Shield: <BadgeCheck className="h-6 w-6" />,
+  TrendingUp: <HeartPulse className="h-6 w-6" />,
+  Users: <Gauge className="h-6 w-6" />,
 };
 
 const stepIcons: Record<string, React.ReactNode> = {
-  Scan: <Scan className="h-8 w-8" />,
+  Scan: <ScanFace className="h-8 w-8" />,
   Sparkles: <Sparkles className="h-8 w-8" />,
-  Calendar: <CalendarDays className="h-8 w-8" />,
+  Calendar: <CalendarClock className="h-8 w-8" />,
 };
+
+const stats = [
+  { value: "5,000+", label: "Happy Clients", icon: <Users className="h-6 w-6" /> },
+  { value: "300+", label: "Verified Stylists", icon: <BadgeCheck className="h-6 w-6" /> },
+  { value: "4.9/5", label: "Average Rating", icon: <Star className="h-6 w-6" /> },
+  { value: "50+", label: "Partner Salons", icon: <Scissors className="h-6 w-6" /> },
+];
+
+const services = [
+  {
+    name: "Braids & Twists",
+    price: "from ₦8,000",
+    description: "Knotless, box braids, and protective styles by certified stylists.",
+    icon: <Feather className="h-6 w-6" />,
+  },
+  {
+    name: "Hair Coloring",
+    price: "from ₦12,000",
+    description: "Global and dimensional color with premium ammonia-free formulas.",
+    icon: <Palette className="h-6 w-6" />,
+  },
+  {
+    name: "Hairline Restoration",
+    price: "from ₦15,000",
+    description: "Trichologist-led treatments to restore and protect your hairline.",
+    icon: <HeartPulse className="h-6 w-6" />,
+  },
+  {
+    name: "Blow Dry & Styling",
+    price: "from ₦5,000",
+    description: "Silky blowouts and occasion-ready styling tailored to you.",
+    icon: <Wind className="h-6 w-6" />,
+  },
+  {
+    name: "Keratin & Treatments",
+    price: "from ₦20,000",
+    description: "Deep conditioning, bond repair, and smoothing treatments.",
+    icon: <Droplets className="h-6 w-6" />,
+  },
+  {
+    name: "Beard Grooming",
+    price: "from ₦3,500",
+    description: "Precision trims, shaping, and hot towel shaves for men.",
+    icon: <Scissors className="h-6 w-6" />,
+  },
+];
 
 export default function Home() {
   const { addItem } = useCart();
   const { toggleItem, isInWishlist } = useWishlist();
   const [visibleSections, setVisibleSections] = useState<Set<string>>(new Set());
+  const [newsletterEmail, setNewsletterEmail] = useState("");
+  const [newsletterSubscribed, setNewsletterSubscribed] = useState(false);
+  const [genderFilter, setGenderFilter] = useState<"female" | "male">("female");
   const productScrollRef = useRef<HTMLDivElement>(null);
   const salonScrollRef = useRef<HTMLDivElement>(null);
   const hairstyleScrollRef = useRef<HTMLDivElement>(null);
+  const heroPausedRef = useRef(false);
+
+  const { data: apiHeroes } = useApiQuery<Hero[]>("/api/shop/heroes", ["shop", "heroes"]);
+  const { data: apiProducts } = useApiQuery<Product[]>("/api/shop/products", ["shop", "products"]);
+  const { data: apiSalons } = useApiQuery<Salon[]>("/api/shop/salons", ["shop", "salons"]);
+  const { data: apiHairstyles } = useApiQuery<Hairstyle[]>("/api/shop/hairstyles", ["shop", "hairstyles"]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -62,114 +138,286 @@ export default function Home() {
     }
   };
 
-  const featuredProducts = products.filter((p) => p.isFeatured);
-  const featuredSalons = salons.filter((s) => s.isFeatured);
+  const featuredProducts = useMemo(() => {
+    const list =
+      apiProducts && apiProducts.length > 0 ? apiProducts : (products as unknown as Product[]);
+    return list
+      .filter((p) => p.isFeatured)
+      .map((p) => {
+        const raw = p as unknown as Record<string, unknown>;
+        return {
+          ...p,
+          image: p.imageUrl ?? p.photos ?? "/product-serum.jpg",
+          rating: Number(raw.averageRating ?? raw.rating ?? 0),
+          reviews: Number(raw.totalReviews ?? raw.reviews ?? 0),
+          price: Number(p.price),
+          comparePrice: raw.comparePrice ? Number(raw.comparePrice) : undefined,
+        };
+      });
+  }, [apiProducts]);
+
+  const featuredSalons = useMemo(() => {
+    const list =
+      apiSalons && apiSalons.length > 0 ? apiSalons : (salons as unknown as Salon[]);
+    return list
+      .filter((s) => s.isFeatured)
+      .map((s) => {
+        const raw = s as unknown as Record<string, unknown>;
+        return {
+          ...s,
+          name: (raw.name as string | undefined) ?? s.businessName ?? "",
+          address: s.address ?? "",
+          image: s.imageUrl ?? s.coverPhoto ?? s.logoUrl ?? "/salon-interior.jpg",
+          rating: Number(raw.averageRating ?? raw.rating ?? 0),
+          reviews: Number(raw.totalReviews ?? raw.reviews ?? 0),
+          isOpen: Boolean(raw.isActive ?? raw.isOpen),
+          specialties: Array.isArray(raw.specialties) ? (raw.specialties as string[]) : [],
+        };
+      });
+  }, [apiSalons]);
+
+  const trendingHairstyles = useMemo(() => {
+    const list =
+      apiHairstyles && apiHairstyles.length > 0
+        ? apiHairstyles
+        : (hairstyles as unknown as Hairstyle[]);
+    return list
+      .filter(
+        (h) =>
+          !h.genderTarget || h.genderTarget === genderFilter || h.genderTarget === "unisex",
+      )
+      .map((h) => ({
+        ...h,
+        image: h.imageUrl ?? h.thumbnailUrl ?? "/hairstyle-afro.jpg",
+        faceShapes:
+          typeof h.faceShapes === "string"
+            ? h.faceShapes.split(",").map((s) => s.trim())
+            : (h.faceShapes ?? []),
+      }));
+  }, [apiHairstyles, genderFilter]);
+
+  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  const scrollPrev = useCallback(() => {
+    if (emblaApi) emblaApi.scrollPrev();
+  }, [emblaApi]);
+
+  const scrollNext = useCallback(() => {
+    if (emblaApi) emblaApi.scrollNext();
+  }, [emblaApi]);
+
+  const onSelect = useCallback(() => {
+    if (!emblaApi) return;
+    setSelectedIndex(emblaApi.selectedScrollSnap());
+  }, [emblaApi, setSelectedIndex]);
+
+  useEffect(() => {
+    if (!emblaApi) return;
+    emblaApi.on("select", onSelect);
+    emblaApi.on("reInit", onSelect);
+  }, [emblaApi, onSelect]);
+
+  useEffect(() => {
+    if (!emblaApi) return;
+    const timer = setInterval(() => {
+      if (!heroPausedRef.current) emblaApi.scrollNext();
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [emblaApi]);
+
+  const fallbackHeroSlides = [
+    {
+      image: "/hero1.png",
+      title: "Discover Your Signature Style",
+      subtitle: "Explore premium hairstyles tailored to your unique features.",
+    },
+    {
+      image: "/hero2.png",
+      title: "Expert Salon Services",
+      subtitle: "Book appointments with top-rated professionals in your area.",
+    },
+    {
+      image: "/hero3.png",
+      title: "Transform Your Look",
+      subtitle: "Experience the magic of AI-powered hairstyle try-ons.",
+    },
+    {
+      image: "/hero4.png",
+      title: "Premium Haircare Products",
+      subtitle: "Shop curated products for your ultimate hair health.",
+    },
+    {
+      image: "/hero5.png",
+      title: "Start Your Hair Journey",
+      subtitle: "From consultation to restoration, we care for your hair at every stage.",
+    }
+  ];
+
+  const heroSlides =
+    apiHeroes && apiHeroes.length > 0
+      ? apiHeroes.map((hero) => ({
+          image: hero.imageUrl ?? "/hero1.png",
+          title: hero.title,
+          subtitle: hero.subtitle ?? "",
+        }))
+      : fallbackHeroSlides;
 
   return (
     <div className="min-h-screen bg-ebs-bg">
       {/* ═══════════════════════════════════════════════════
-          HERO SECTION
+          HERO SECTION (CAROUSEL)
           ═══════════════════════════════════════════════════ */}
-      <section className="relative min-h-screen flex items-center overflow-hidden">
-        {/* Background effects */}
-        <div className="absolute inset-0 bg-gradient-to-br from-ebs-bg via-ebs-bg to-ebs-bg-elevated" />
-        <div className="absolute top-1/4 right-0 w-[600px] h-[600px] rounded-full bg-ebs-gold/5 blur-[120px]" />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] rounded-full bg-ebs-teal/5 blur-[100px]" />
+      <section
+        className="relative h-screen w-full overflow-hidden"
+        onMouseEnter={() => (heroPausedRef.current = true)}
+        onMouseLeave={() => (heroPausedRef.current = false)}
+      >
+        <div className="absolute inset-0 overflow-hidden" ref={emblaRef}>
+          <div className="flex h-full touch-pan-y">
+            {heroSlides.map((slide, index) => (
+              <div key={index} className="relative flex-[0_0_100%] h-full min-w-0">
+                <div className="absolute inset-0">
+                  <img
+                    src={slide.image}
+                    alt={slide.title}
+                    className="w-full h-full object-contain object-right"
+                  />
+                  {/* Subtle dark gradient overlay for text readability */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-ebs-bg/90 via-ebs-bg/60 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-ebs-bg/80 via-transparent to-transparent" />
+                </div>
 
-        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-32 w-full">
-          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-            <div className="space-y-8 animate-fade-in-up">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-ebs-gold/10 border border-ebs-gold/20">
-                <Sparkles className="h-4 w-4 text-ebs-gold" />
-                <span className="text-sm font-medium text-ebs-gold">
-                  AI-Powered Hair & Beauty Platform
-                </span>
-              </div>
+                <div className="relative h-full flex items-center mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                  <div className="max-w-xl space-y-6 mt-16">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20">
+                      <Sparkles className="h-4 w-4 text-ebs-gold" />
+                      <span className="text-sm font-medium text-white shadow-sm">
+                        Early Bright Excellence
+                      </span>
+                    </div>
 
-              <h1 className="font-display text-ebs-text">
-                Your Next Great
-                <br />
-                <span className="text-gradient-gold">Look Starts Here</span>
-              </h1>
+                    <h1 className="text-5xl md:text-7xl font-display text-white font-bold leading-tight">
+                      {slide.title}
+                    </h1>
 
-              <p className="text-lg md:text-xl text-ebs-text-secondary max-w-lg leading-relaxed">
-                AI-powered hairstyle try-on, verified salon booking, and hairline
-                restoration — all built for you. Discover styles that match your
-                unique features.
-              </p>
+                    <p className="text-2xl md:text-3xl text-white/90 font-light leading-relaxed max-w-lg">
+                      {slide.subtitle}
+                    </p>
 
-              <div className="flex flex-wrap gap-4">
-                <Link to="/try-on">
-                  <Button className="h-14 px-8 bg-gradient-gold text-ebs-bg font-bold text-base hover:shadow-gold transition-all rounded-xl">
-                    <Sparkles className="h-5 w-5 mr-2" />
-                    Try AI Filter Free
-                  </Button>
-                </Link>
-                <Link to="/salons">
-                  <Button
-                    variant="outline"
-                    className="h-14 px-8 border-ebs-gold/40 text-ebs-gold font-semibold hover:bg-ebs-gold/10 rounded-xl"
-                  >
-                    <MapPin className="h-5 w-5 mr-2" />
-                    Find a Salon
-                  </Button>
-                </Link>
-              </div>
-
-              <div className="flex items-center gap-6 pt-4">
-                <div className="flex -space-x-3">
-                  {[
-                    "/hairstyle-afro.jpg",
-                    "/hairstyle-fade.jpg",
-                    "/hairstyle-braids.jpg",
-                  ].map((src, i) => (
-                    <img
-                      key={i}
-                      src={src}
-                      alt=""
-                      className="w-10 h-10 rounded-full border-2 border-ebs-bg object-cover"
-                    />
-                  ))}
-                  <div className="w-10 h-10 rounded-full border-2 border-ebs-bg bg-ebs-gold/20 flex items-center justify-center text-xs font-bold text-ebs-gold">
-                    +
+                    <div className="flex flex-wrap gap-4 pt-4">
+                      <Link to="/try-on">
+                        <Button className="h-14 px-8 bg-ebs-gold text-ebs-bg font-bold text-base hover:bg-ebs-gold-light transition-all rounded-xl shadow-lg">
+                          Get Started Now
+                        </Button>
+                      </Link>
+                      <Link to="/salons">
+                        <Button
+                          variant="outline"
+                          className="h-14 px-8 border-white/30 text-white font-semibold hover:bg-white/10 backdrop-blur-md rounded-xl transition-all"
+                        >
+                          Find a Salon
+                        </Button>
+                      </Link>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-ebs-text">50,000+ Users</p>
-                  <p className="text-xs text-ebs-text-muted">Trust Early Bright</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Custom Subtle Navigation Arrows */}
+        <button
+          className="absolute left-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition-all opacity-0 md:opacity-100 z-10"
+          onClick={scrollPrev}
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+        <button
+          className="absolute right-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition-all opacity-0 md:opacity-100 z-10"
+          onClick={scrollNext}
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
+
+        {/* Slide Indicators */}
+        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex gap-2 z-10">
+          {heroSlides.map((_, index) => (
+            <button
+              key={index}
+              onClick={() => emblaApi?.scrollTo(index)}
+              className={`h-1.5 rounded-full transition-all duration-300 ${index === selectedIndex ? "w-8 bg-ebs-gold" : "w-2 bg-white/50"
+                }`}
+            />
+          ))}
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════
+          STATS BAND
+          ═══════════════════════════════════════════════════ */}
+      <section className="py-14 bg-ebs-bg-card/40 border-y border-white/5">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-10">
+            {stats.map((stat) => (
+              <div key={stat.label} className="flex items-center justify-center gap-4">
+                <div className="h-12 w-12 rounded-xl bg-ebs-gold/10 flex items-center justify-center text-ebs-gold shrink-0">
+                  {stat.icon}
                 </div>
-                <div className="h-10 w-px bg-white/10" />
                 <div>
-                  <p className="text-sm font-semibold text-ebs-text">2,000+ Salons</p>
-                  <p className="text-xs text-ebs-text-muted">Verified & Ready</p>
+                  <p className="font-display text-3xl md:text-4xl text-ebs-text font-semibold leading-none">
+                    {stat.value}
+                  </p>
+                  <p className="text-sm text-ebs-text-muted mt-1">{stat.label}</p>
                 </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════
+          ABOUT / WELCOME SECTION
+          ═══════════════════════════════════════════════════ */}
+      <section id="about" data-animate className="py-24 bg-ebs-bg">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="grid lg:grid-cols-2 gap-16 items-center">
+            <div className="space-y-6">
+              <h2 className="font-display text-4xl md:text-5xl text-ebs-text font-light">
+                Welcome to <span className="font-semibold text-gradient-gold">EARLY BRIGHT</span>
+              </h2>
+              <div className="space-y-4 text-ebs-text-secondary leading-relaxed">
+                <p>
+                  Early Bright is a modern boutique hair salon. We specialise in all hair types and ethnicities including European hair, Asian hair, Afro hair and more. We offer various luxury extension methods including tape-ins, microlinks and LA Weave.
+                </p>
+                <p>
+                  It is our priority that our clients receive a personalised service and impeccable results at our salon. Our philosophy derives from the understanding that customer service comes first and we are proud to bring that experience to you in our salon.
+                </p>
+                <p className="font-medium text-ebs-text">
+                  We hope to see you soon!
+                </p>
+              </div>
+              <div className="pt-4">
+                <Link to="/salons/book" className="inline-flex items-center gap-2 text-lg font-semibold text-ebs-text hover:text-ebs-gold transition-colors group">
+                  Book Now
+                  <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                </Link>
               </div>
             </div>
-
-            <div className="relative lg:h-[600px] flex items-center justify-center animate-fade-in delay-200">
-              <div className="absolute w-[350px] h-[350px] md:w-[450px] md:h-[450px] rounded-full bg-ebs-gold/10 animate-pulse-glow" />
-              <img
-                src="/hero-model.jpg"
-                alt="Premium hairstyle"
-                className="relative h-[450px] md:h-[550px] w-auto object-contain rounded-3xl shadow-dark-lg"
-              />
-              {/* Floating badges */}
-              <div className="absolute top-10 right-4 glass-panel rounded-xl px-4 py-3 border border-ebs-gold/20 animate-float">
-                <div className="flex items-center gap-2">
-                  <Star className="h-4 w-4 text-ebs-gold fill-ebs-gold" />
-                  <span className="text-sm font-semibold text-ebs-text">4.9 Rating</span>
-                </div>
-              </div>
-              <div className="absolute bottom-20 left-0 glass-panel rounded-xl px-4 py-3 border border-ebs-teal/20 animate-float delay-300">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4 text-ebs-teal" />
-                  <span className="text-sm font-semibold text-ebs-text">KYC Verified</span>
-                </div>
+            <div className="relative animate-fade-in delay-200">
+              <div className="aspect-[4/3] rounded-sm overflow-hidden relative shadow-dark-lg">
+                <img
+                  src="/salon-interior.jpg"
+                  alt="Salon Interior"
+                  className="w-full h-full object-cover hover:scale-105 transition-transform duration-700"
+                />
               </div>
             </div>
           </div>
         </div>
       </section>
+
 
       {/* ═══════════════════════════════════════════════════
           HOW IT WORKS
@@ -193,9 +441,8 @@ export default function Home() {
             {howItWorksSteps.map((step, i) => (
               <div
                 key={step.step}
-                className={`relative group p-8 rounded-2xl bg-ebs-bg-card border border-white/5 hover:border-ebs-gold/30 transition-all duration-300 hover:-translate-y-1 ${
-                  visibleSections.has("how-it-works") ? "animate-fade-in-up" : "opacity-0"
-                }`}
+                className={`relative group p-8 rounded-2xl bg-ebs-bg-card border border-white/5 hover:border-ebs-gold/30 transition-all duration-300 hover:-translate-y-1 ${visibleSections.has("how-it-works") ? "animate-fade-in-up" : "opacity-0"
+                  }`}
                 style={{ animationDelay: `${i * 150}ms` }}
               >
                 <div className="absolute -top-4 left-8 h-8 w-8 rounded-full bg-ebs-gold text-ebs-bg flex items-center justify-center text-sm font-bold">
@@ -232,9 +479,8 @@ export default function Home() {
             {features.map((feature, i) => (
               <div
                 key={feature.title}
-                className={`p-6 rounded-2xl bg-ebs-bg border border-white/5 hover:border-ebs-gold/20 transition-all duration-300 group ${
-                  visibleSections.has("features") ? "animate-fade-in-up" : "opacity-0"
-                }`}
+                className={`p-6 rounded-2xl bg-ebs-bg border border-white/5 hover:border-ebs-gold/20 transition-all duration-300 group ${visibleSections.has("features") ? "animate-fade-in-up" : "opacity-0"
+                  }`}
                 style={{ animationDelay: `${i * 100}ms` }}
               >
                 <div className="h-12 w-12 rounded-xl bg-ebs-gold/10 flex items-center justify-center text-ebs-gold mb-4 group-hover:bg-ebs-gold/20 group-hover:scale-110 transition-all">
@@ -246,6 +492,60 @@ export default function Home() {
                 </p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════
+          OUR SERVICES
+          ═══════════════════════════════════════════════════ */}
+      <section id="services" data-animate className="py-24 relative">
+        <div className="absolute top-0 left-0 w-[400px] h-[400px] rounded-full bg-ebs-teal/5 blur-[120px]" />
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative">
+          <div className="text-center mb-16">
+            <p className="text-sm font-semibold text-ebs-teal tracking-widest uppercase mb-3">
+              Our Services
+            </p>
+            <h2 className="font-display text-ebs-text mb-4">
+              Complete Hair Care, <span className="text-ebs-teal">Expertly Done</span>
+            </h2>
+            <p className="text-ebs-text-secondary max-w-xl mx-auto">
+              From protective styling to restoration, our certified stylists
+              deliver premium results across every service.
+            </p>
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {services.map((service, i) => (
+              <div
+                key={service.name}
+                className={`p-7 rounded-2xl bg-ebs-bg-card border border-white/5 hover:border-ebs-teal/30 transition-all duration-300 group ${visibleSections.has("services") ? "animate-fade-in-up" : "opacity-0"
+                  }`}
+                style={{ animationDelay: `${i * 100}ms` }}
+              >
+                <div className="flex items-start justify-between mb-5">
+                  <div className="h-12 w-12 rounded-xl bg-ebs-teal/10 flex items-center justify-center text-ebs-teal group-hover:bg-ebs-teal group-hover:text-white transition-colors">
+                    {service.icon}
+                  </div>
+                  <span className="text-sm font-semibold text-ebs-teal">
+                    {service.price}
+                  </span>
+                </div>
+                <h3 className="font-display text-xl text-ebs-text mb-2">{service.name}</h3>
+                <p className="text-sm text-ebs-text-secondary leading-relaxed">
+                  {service.description}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="text-center mt-12">
+            <Link to="/salons">
+              <Button className="h-12 px-8 bg-ebs-teal hover:bg-ebs-teal-light text-white font-semibold rounded-xl">
+                View Full Menu
+                <ArrowRight className="h-5 w-5 ml-2" />
+              </Button>
+            </Link>
           </div>
         </div>
       </section>
@@ -321,18 +621,17 @@ export default function Home() {
                           name: product.name,
                           price: product.price,
                           image: product.image,
-                          category: product.category,
+                          category: product.category ?? "",
                         });
                       }}
                       className="absolute top-3 right-3 h-9 w-9 rounded-full bg-ebs-bg/80 backdrop-blur flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                       style={{ right: product.isNew ? "3rem" : "0.75rem" }}
                     >
                       <Heart
-                        className={`h-4 w-4 ${
-                          isInWishlist(product.id)
-                            ? "fill-ebs-rose text-ebs-rose"
-                            : "text-ebs-text"
-                        }`}
+                        className={`h-4 w-4 ${isInWishlist(product.id)
+                          ? "fill-ebs-rose text-ebs-rose"
+                          : "text-ebs-text"
+                          }`}
                       />
                     </button>
                   </Link>
@@ -371,7 +670,7 @@ export default function Home() {
                             price: product.price,
                             quantity: 1,
                             image: product.image,
-                            category: product.category,
+                            category: product.category ?? "",
                           })
                         }
                         className="h-9 w-9 rounded-lg bg-ebs-gold/10 flex items-center justify-center text-ebs-gold hover:bg-ebs-gold hover:text-ebs-bg transition-colors"
@@ -447,11 +746,10 @@ export default function Home() {
                         </span>
                       )}
                       <span
-                        className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${
-                          salon.isOpen
-                            ? "bg-ebs-success text-white"
-                            : "bg-ebs-error text-white"
-                        }`}
+                        className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${salon.isOpen
+                          ? "bg-ebs-success text-white"
+                          : "bg-ebs-error text-white"
+                          }`}
                       >
                         <span className="h-1.5 w-1.5 rounded-full bg-white" />
                         {salon.isOpen ? "Open" : "Closed"}
@@ -526,6 +824,30 @@ export default function Home() {
             <h2 className="font-display text-ebs-text">
               Trending <span className="text-ebs-rose">Hairstyles</span>
             </h2>
+            <div className="flex justify-center mt-8">
+              <div className="inline-flex rounded-full border border-white/20 p-1 bg-ebs-bg-card/50">
+                <button
+                  onClick={() => setGenderFilter("male")}
+                  className={`px-8 py-2.5 rounded-full text-sm font-medium transition-all ${
+                    genderFilter === "male"
+                      ? "bg-white text-ebs-bg"
+                      : "text-ebs-text hover:text-white"
+                  }`}
+                >
+                  Male Styles
+                </button>
+                <button
+                  onClick={() => setGenderFilter("female")}
+                  className={`px-8 py-2.5 rounded-full text-sm font-medium transition-all ${
+                    genderFilter === "female"
+                      ? "bg-white text-ebs-bg"
+                      : "text-ebs-text hover:text-white"
+                  }`}
+                >
+                  Female Styles
+                </button>
+              </div>
+            </div>
           </div>
 
           <div className="relative">
@@ -546,7 +868,7 @@ export default function Home() {
               ref={hairstyleScrollRef}
               className="flex gap-6 overflow-x-auto scrollbar-hide scroll-smooth px-2"
             >
-              {hairstyles.map((style) => (
+              {trendingHairstyles.map((style) => (
                 <div
                   key={style.id}
                   className="min-w-[260px] max-w-[260px] rounded-2xl overflow-hidden group relative"
@@ -636,6 +958,78 @@ export default function Home() {
       </section>
 
       {/* ═══════════════════════════════════════════════════
+          AI TRY-ON SHOWCASE
+          ═══════════════════════════════════════════════════ */}
+      <section id="tryon" data-animate className="py-24 bg-ebs-bg-card/50 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-ebs-gold/5 via-transparent to-ebs-rose/5" />
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div className="relative order-2 lg:order-1">
+              <div className="aspect-[4/5] max-w-md mx-auto rounded-2xl overflow-hidden shadow-dark-lg">
+                <img
+                  src="/hero-model.jpg"
+                  alt="AI hairstyle try-on preview"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 px-5 py-3 rounded-full bg-ebs-bg-elevated border border-white/10 shadow-dark backdrop-blur">
+                <ScanFace className="h-5 w-5 text-ebs-gold" />
+                <span className="text-sm font-medium text-ebs-text">
+                  AI Try-On Powered
+                </span>
+              </div>
+            </div>
+            <div className="order-1 lg:order-2 space-y-6">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-ebs-rose/10 border border-ebs-rose/20">
+                <Sparkles className="h-4 w-4 text-ebs-rose" />
+                <span className="text-sm font-medium text-ebs-rose">
+                  AI Hairstyle Try-On
+                </span>
+              </div>
+              <h2 className="font-display text-ebs-text">
+                See It on You Before <br />
+                <span className="text-gradient-gold">You Commit</span>
+              </h2>
+              <p className="text-ebs-text-secondary leading-relaxed max-w-md">
+                Upload a photo and our AI instantly renders hundreds of
+                hairstyles, colors, and textures onto your face. Match styles to
+                your features, compare looks side by side, and book with total
+                confidence.
+              </p>
+              <ul className="space-y-3">
+                {[
+                  "Real-time style rendering tailored to your face shape",
+                  "Hairline and color analysis for accurate recommendations",
+                  "Direct booking from any style you love",
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-3 text-ebs-text-secondary">
+                    <CheckCircle2 className="h-5 w-5 text-ebs-gold shrink-0 mt-0.5" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="flex flex-wrap gap-4 pt-2">
+                <Link to="/try-on">
+                  <Button className="h-12 px-8 bg-ebs-gold text-ebs-bg font-bold hover:bg-ebs-gold-light rounded-xl">
+                    Try It Now — Free
+                    <ArrowRight className="h-5 w-5 ml-2" />
+                  </Button>
+                </Link>
+                <Link to="/hairstyles">
+                  <Button
+                    variant="outline"
+                    className="h-12 px-6 border-ebs-rose/30 text-ebs-rose hover:bg-ebs-rose/10 rounded-xl"
+                  >
+                    Browse Styles
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════
           TESTIMONIALS
           ═══════════════════════════════════════════════════ */}
       <section id="testimonials" data-animate className="py-24 bg-ebs-bg-card/50">
@@ -653,20 +1047,18 @@ export default function Home() {
             {testimonials.map((t, i) => (
               <div
                 key={t.id}
-                className={`p-6 rounded-2xl bg-ebs-bg border border-white/5 hover:border-ebs-gold/10 transition-all duration-300 ${
-                  visibleSections.has("testimonials") ? "animate-fade-in-up" : "opacity-0"
-                }`}
+                className={`p-6 rounded-2xl bg-ebs-bg border border-white/5 hover:border-ebs-gold/10 transition-all duration-300 ${visibleSections.has("testimonials") ? "animate-fade-in-up" : "opacity-0"
+                  }`}
                 style={{ animationDelay: `${i * 150}ms` }}
               >
                 <div className="flex items-center gap-1 mb-4">
                   {[...Array(5)].map((_, j) => (
                     <Star
                       key={j}
-                      className={`h-4 w-4 ${
-                        j < t.rating
-                          ? "text-ebs-gold fill-ebs-gold"
-                          : "text-ebs-text-muted"
-                      }`}
+                      className={`h-4 w-4 ${j < t.rating
+                        ? "text-ebs-gold fill-ebs-gold"
+                        : "text-ebs-text-muted"
+                        }`}
                     />
                   ))}
                 </div>
@@ -720,6 +1112,115 @@ export default function Home() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════
+          FAQ SECTION
+          ═══════════════════════════════════════════════════ */}
+      <section id="faq" data-animate className="py-24 bg-ebs-bg-card/30">
+        <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="font-display text-3xl md:text-4xl text-ebs-text">
+              Frequently Asked <span className="text-gradient-gold">Questions</span>
+            </h2>
+            <p className="mt-4 text-ebs-text-secondary">
+              Everything you need to know about our salon and services.
+            </p>
+          </div>
+
+          <Accordion type="single" collapsible className="w-full space-y-4">
+            <AccordionItem value="item-1" className="border border-white/10 rounded-xl px-6 bg-ebs-bg">
+              <AccordionTrigger className="text-ebs-text hover:text-ebs-gold font-medium py-4 text-left">
+                Do I need to book an appointment in advance?
+              </AccordionTrigger>
+              <AccordionContent className="text-ebs-text-secondary pb-4">
+                While we do accept walk-ins depending on availability, we highly recommend booking in advance to secure your preferred time slot and stylist, especially for specialized services like LA Weave or microlinks.
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="item-2" className="border border-white/10 rounded-xl px-6 bg-ebs-bg">
+              <AccordionTrigger className="text-ebs-text hover:text-ebs-gold font-medium py-4 text-left">
+                What types of hair extensions do you offer?
+              </AccordionTrigger>
+              <AccordionContent className="text-ebs-text-secondary pb-4">
+                We offer a premium selection of luxury extensions including tape-ins, microlinks, and the LA Weave. Our specialists will consult with you to determine the best method for your hair type and desired look.
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="item-3" className="border border-white/10 rounded-xl px-6 bg-ebs-bg">
+              <AccordionTrigger className="text-ebs-text hover:text-ebs-gold font-medium py-4 text-left">
+                Is your AI Try-On feature accurate?
+              </AccordionTrigger>
+              <AccordionContent className="text-ebs-text-secondary pb-4">
+                Our AI Try-On uses advanced facial recognition and mapping to provide highly realistic previews of different hairstyles and colors on your face, helping you make confident decisions before your appointment.
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="item-4" className="border border-white/10 rounded-xl px-6 bg-ebs-bg">
+              <AccordionTrigger className="text-ebs-text hover:text-ebs-gold font-medium py-4 text-left">
+                Do you cater to all hair types?
+              </AccordionTrigger>
+              <AccordionContent className="text-ebs-text-secondary pb-4">
+                Yes! We are proud to be a versatile salon specializing in all hair ethnicities and textures, including European, Asian, and Afro hair. Our stylists are extensively trained across all hair types.
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════
+          NEWSLETTER
+          ═══════════════════════════════════════════════════ */}
+      <section className="py-24 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-ebs-gold/10 via-ebs-bg to-ebs-teal/10" />
+        <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 relative text-center">
+          <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-ebs-gold/10 text-ebs-gold mb-6">
+            <Mail className="h-7 w-7" />
+          </div>
+          <h2 className="font-display text-ebs-text mb-4">
+            Stay in the <span className="text-gradient-gold">Loop</span>
+          </h2>
+          <p className="text-ebs-text-secondary max-w-xl mx-auto mb-8">
+            Join our newsletter for expert hair tips, exclusive offers, and
+            early access to new services and product drops. No spam — just
+            great hair content.
+          </p>
+          {newsletterSubscribed ? (
+            <div className="flex items-center justify-center gap-3 px-6 py-5 rounded-2xl bg-ebs-success/10 border border-ebs-success/30">
+              <CheckCircle2 className="h-6 w-6 text-ebs-success shrink-0" />
+              <p className="text-ebs-text font-medium">
+                You're subscribed! Watch your inbox for the latest from Early Bright.
+              </p>
+            </div>
+          ) : (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (newsletterEmail.includes("@")) setNewsletterSubscribed(true);
+              }}
+              className="flex flex-col sm:flex-row gap-3 max-w-lg mx-auto"
+            >
+              <input
+                type="email"
+                required
+                value={newsletterEmail}
+                onChange={(e) => setNewsletterEmail(e.target.value)}
+                placeholder="Enter your email address"
+                className="flex-1 h-14 px-5 rounded-xl bg-ebs-bg-elevated border border-white/10 text-ebs-text placeholder:text-ebs-text-muted focus:outline-none focus:border-ebs-gold/50 transition-colors"
+              />
+              <Button
+                type="submit"
+                className="h-14 px-8 bg-ebs-gold text-ebs-bg font-bold hover:bg-ebs-gold-light rounded-xl transition-all"
+              >
+                Subscribe
+                <Send className="h-4 w-4 ml-2" />
+              </Button>
+            </form>
+          )}
+          <p className="text-xs text-ebs-text-muted mt-4">
+            By subscribing you agree to our privacy policy. Unsubscribe anytime.
+          </p>
         </div>
       </section>
 

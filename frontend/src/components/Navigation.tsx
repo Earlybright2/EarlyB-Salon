@@ -12,13 +12,29 @@ import {
   LogOut,
   User,
   ShieldCheck,
+  ChevronDown,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 const navLinks = [
-  { href: "/", label: "Home" },
-  { href: "/shop", label: "Shop" },
-  { href: "/salons", label: "Salons" },
+  { href: "#about", label: "About" },
+  { 
+    href: "/shop", 
+    label: "Shop",
+    subLinks: [
+      { href: "/shop", label: "All Products" },
+      { href: "/shop?category=haircare", label: "Haircare" },
+      { href: "/shop?category=tools", label: "Tools" },
+    ]
+  },
+  { 
+    href: "/salons", 
+    label: "Salons",
+    subLinks: [
+      { href: "/salons", label: "Find Salons" },
+      { href: "/salons/book", label: "Book Appointment" },
+    ]
+  },
   { href: "/try-on", label: "AI Try-On" },
   { href: "/restore", label: "Restore" },
 ];
@@ -54,7 +70,6 @@ export default function Navigation() {
         <div className="flex h-16 md:h-20 items-center justify-between">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 shrink-0">
-            <Sparkles className="h-6 w-6 text-ebs-gold" />
             <span className="font-display text-xl md:text-2xl font-semibold tracking-tight text-ebs-text">
               Early <span className="text-ebs-gold">Bright</span>
             </span>
@@ -63,17 +78,34 @@ export default function Navigation() {
           {/* Desktop Nav Links */}
           <div className="hidden lg:flex items-center gap-8">
             {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                to={link.href}
-                className={`text-sm font-medium transition-colors hover:text-ebs-gold ${
-                  location.pathname === link.href
-                    ? "text-ebs-gold"
-                    : "text-ebs-text-secondary"
-                }`}
-              >
-                {link.label}
-              </Link>
+              <div key={link.href} className="relative group">
+                <Link
+                  to={link.href}
+                  className={`flex items-center gap-1 text-sm font-medium transition-colors hover:text-ebs-gold py-4 ${
+                    location.pathname === link.href || (link.subLinks && location.pathname.startsWith(link.href))
+                      ? "text-ebs-gold"
+                      : "text-ebs-text-secondary"
+                  }`}
+                >
+                  {link.label}
+                  {link.subLinks && <ChevronDown className="h-4 w-4 transition-transform group-hover:rotate-180" />}
+                </Link>
+                {link.subLinks && (
+                  <div className="absolute top-[80%] left-0 mt-2 w-48 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 transform origin-top-left group-hover:translate-y-0 translate-y-2 z-50">
+                    <div className="py-2 rounded-xl bg-ebs-bg/95 backdrop-blur-xl border border-ebs-gold/10 shadow-dark-lg">
+                      {link.subLinks.map((sub) => (
+                        <Link
+                          key={sub.label}
+                          to={sub.href}
+                          className="block px-4 py-2 text-sm text-ebs-text-secondary hover:text-ebs-gold hover:bg-ebs-gold/5 transition-colors"
+                        >
+                          {sub.label}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
 
@@ -143,13 +175,21 @@ export default function Navigation() {
                 </div>
               </div>
             ) : (
-              <Link
-                to="/login"
-                className="hidden md:inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-ebs-bg bg-gradient-gold rounded-lg hover:shadow-gold transition-shadow"
-              >
-                <User className="h-4 w-4" />
-                Sign In
-              </Link>
+              <div className="hidden md:flex items-center gap-3">
+                <Link
+                  to="/login"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-ebs-text hover:text-ebs-gold transition-colors"
+                >
+                  <User className="h-4 w-4" />
+                  Sign In
+                </Link>
+                <Link
+                  to="/register"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-ebs-bg bg-gradient-gold rounded-lg hover:shadow-gold transition-shadow"
+                >
+                  Get Started
+                </Link>
+              </div>
             )}
 
             {/* Mobile Menu */}

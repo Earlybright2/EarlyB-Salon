@@ -78,6 +78,7 @@ class Salon(models.Model):
     instagram_url = models.CharField(max_length=500, blank=True, null=True)
     cover_photo = models.CharField(max_length=500, blank=True, null=True)
     logo_url = models.CharField(max_length=500, blank=True, null=True)
+    image = models.ImageField(upload_to="salons/", null=True, blank=True)
     working_hours = models.JSONField(default=dict, blank=True)
     is_verified = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
@@ -141,6 +142,7 @@ class Product(models.Model):
     stock_quantity = models.IntegerField(default=0)
     sku = models.CharField(max_length=100, blank=True, null=True)
     photos = models.TextField(blank=True, null=True)
+    image = models.ImageField(upload_to="products/", null=True, blank=True)
     ingredients = models.TextField(blank=True, null=True)
     usage_guide = models.TextField(blank=True, null=True)
     badge = models.CharField(max_length=50, blank=True, null=True)
@@ -174,6 +176,7 @@ class Hairstyle(models.Model):
     face_shapes = models.TextField(blank=True, null=True)
     hair_types = models.TextField(blank=True, null=True)
     thumbnail_url = models.CharField(max_length=500, blank=True, null=True)
+    image = models.ImageField(upload_to="hairstyles/", null=True, blank=True)
     trend_score = models.IntegerField(default=0)
     is_celebrity = models.BooleanField(default=False)
     celebrity_name = models.CharField(max_length=255, blank=True, null=True)
@@ -398,3 +401,21 @@ class AiRecommendation(models.Model):
 
     def __str__(self):
         return f"AiRecommendation {self.id}"
+
+
+class Hero(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    title = models.CharField(max_length=255)
+    subtitle = models.TextField(blank=True, null=True)
+    image = models.ImageField(upload_to="heroes/", null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "heroes"
+        ordering = ["order", "-created_at"]
+
+    def __str__(self):
+        return self.title
