@@ -33,7 +33,7 @@ import {
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import useEmblaCarousel from "embla-carousel-react";
 import { useApiQuery } from "@/hooks/useApi";
-import type { Hairstyle, Hero, Product, Salon } from "@/lib/types";
+import type { Hairstyle, Hero } from "@/lib/types";
 import {
   Accordion,
   AccordionContent,
@@ -113,9 +113,10 @@ export default function Home() {
   const heroPausedRef = useRef(false);
 
   const { data: apiHeroes } = useApiQuery<Hero[]>("/api/shop/heroes", ["shop", "heroes"]);
-  const { data: apiProducts } = useApiQuery<Product[]>("/api/shop/products", ["shop", "products"]);
-  const { data: apiSalons } = useApiQuery<Salon[]>("/api/shop/salons", ["shop", "salons"]);
-  const { data: apiHairstyles } = useApiQuery<Hairstyle[]>("/api/shop/hairstyles", ["shop", "hairstyles"]);
+  const { data: apiHairstyles } = useApiQuery<Hairstyle[]>(
+    "/api/shop/hairstyles",
+    ["shop", "hairstyles"],
+  );
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -139,60 +140,79 @@ export default function Home() {
   };
 
   const featuredProducts = useMemo(() => {
-    const list =
-      apiProducts && apiProducts.length > 0 ? apiProducts : (products as unknown as Product[]);
-    return list
-      .filter((p) => p.isFeatured)
-      .map((p) => {
-        const raw = p as unknown as Record<string, unknown>;
-        return {
-          ...p,
-          image: p.imageUrl ?? p.photos ?? "/product-serum.jpg",
-          rating: Number(raw.averageRating ?? raw.rating ?? 0),
-          reviews: Number(raw.totalReviews ?? raw.reviews ?? 0),
-          price: Number(p.price),
-          comparePrice: raw.comparePrice ? Number(raw.comparePrice) : undefined,
-        };
-      });
-  }, [apiProducts]);
+    return products
+      .slice(0, 8)
+      .map((product) => ({
+        ...product,
+        image: product.image ?? "/product-serum.jpg",
+        rating: Number(product.rating ?? 0),
+        reviews: Number(product.reviews ?? 0),
+        price: Number(product.price),
+        comparePrice: product.comparePrice ? Number(product.comparePrice) : undefined,
+      }));
+  }, []);
 
   const featuredSalons = useMemo(() => {
-    const list =
-      apiSalons && apiSalons.length > 0 ? apiSalons : (salons as unknown as Salon[]);
-    return list
-      .filter((s) => s.isFeatured)
-      .map((s) => {
-        const raw = s as unknown as Record<string, unknown>;
-        return {
-          ...s,
-          name: (raw.name as string | undefined) ?? s.businessName ?? "",
-          address: s.address ?? "",
-          image: s.imageUrl ?? s.coverPhoto ?? s.logoUrl ?? "/salon-interior.jpg",
-          rating: Number(raw.averageRating ?? raw.rating ?? 0),
-          reviews: Number(raw.totalReviews ?? raw.reviews ?? 0),
-          isOpen: Boolean(raw.isActive ?? raw.isOpen),
-          specialties: Array.isArray(raw.specialties) ? (raw.specialties as string[]) : [],
-        };
-      });
-  }, [apiSalons]);
+    const localSalons = [
+      ...salons.filter((salon) => salon.isFeatured),
+      {
+        id: 3,
+        name: "Luna Luxe Salon",
+        description:
+          "A polished beauty lounge for luxury color, styling, and extension services with a calm, premium finish.",
+        address: "25 Keffi Street, Gwarinpa",
+        city: "Abuja",
+        rating: 4.7,
+        reviews: 154,
+        image: "/salon-interior.jpg",
+        isVerified: true,
+        isOpen: true,
+        isFeatured: true,
+        busyPercentage: 64,
+        specialties: ["Color", "Styling", "Extensions"],
+        phoneNumber: "+234 703 111 2222",
+        seatCapacity: 7,
+        services: [],
+      },
+    ];
+
+    return localSalons.map((salon) => ({
+      ...salon,
+      image: salon.image ?? "/salon-interior.jpg",
+      specialties: salon.specialties ?? [],
+    }));
+  }, []);
 
   const trendingHairstyles = useMemo(() => {
-    const list =
-      apiHairstyles && apiHairstyles.length > 0
-        ? apiHairstyles
-        : (hairstyles as unknown as Hairstyle[]);
-    return list
+    const apiStyles = (apiHairstyles ?? []).map((style) => ({
+      id: style.id,
+      name: style.name,
+      category: style.category ?? "",
+      genderTarget: style.genderTarget ?? "unisex",
+      image: style.imageUrl ?? "/hairstyle-afro.jpg",
+      faceShapes:
+        typeof style.faceShapes === "string"
+          ? style.faceShapes.split(",").map((shape) => shape.trim())
+          : (style.faceShapes ?? []),
+      hairTypes: [],
+      trendScore: style.trendScore ?? 0,
+    }));
+    const source = apiStyles.length > 0 ? apiStyles : hairstyles;
+    return source
       .filter(
-        (h) =>
-          !h.genderTarget || h.genderTarget === genderFilter || h.genderTarget === "unisex",
+        (style) =>
+          !style.genderTarget || style.genderTarget === genderFilter || style.genderTarget === "unisex",
       )
-      .map((h) => ({
-        ...h,
-        image: h.imageUrl ?? h.thumbnailUrl ?? "/hairstyle-afro.jpg",
-        faceShapes:
-          typeof h.faceShapes === "string"
-            ? h.faceShapes.split(",").map((s) => s.trim())
-            : (h.faceShapes ?? []),
+      .slice(0, 4)
+      .map((style) => ({
+        ...style,
+        image: style.image ?? "/hairstyle-fade.jpg",
+        faceShapes: Array.isArray(style.faceShapes)
+          ? style.faceShapes
+          : String(style.faceShapes ?? "")
+              .split(",")
+              .map((shape) => shape.trim())
+              .filter(Boolean),
       }));
   }, [apiHairstyles, genderFilter]);
 
@@ -595,7 +615,7 @@ export default function Home() {
               {featuredProducts.map((product) => (
                 <div
                   key={product.id}
-                  className="min-w-[280px] max-w-[280px] rounded-2xl bg-ebs-bg-card border border-white/5 overflow-hidden group hover:border-ebs-gold/20 transition-all duration-300 hover:-translate-y-1 hover:shadow-dark"
+                  className="min-w-[220px] max-w-[220px] rounded-2xl bg-ebs-bg-card border border-white/5 overflow-hidden group hover:border-ebs-gold/20 transition-all duration-300 hover:-translate-y-1 hover:shadow-dark"
                 >
                   <Link to={`/shop/${product.id}`} className="relative block">
                     <img
@@ -730,7 +750,7 @@ export default function Home() {
               {featuredSalons.map((salon) => (
                 <div
                   key={salon.id}
-                  className="min-w-[380px] max-w-[380px] rounded-2xl bg-ebs-bg border border-white/5 overflow-hidden group hover:border-ebs-teal/20 transition-all duration-300 hover:-translate-y-1 hover:shadow-dark"
+                  className="min-w-[320px] max-w-[320px] rounded-2xl bg-ebs-bg border border-white/5 overflow-hidden group hover:border-ebs-teal/20 transition-all duration-300 hover:-translate-y-1 hover:shadow-dark"
                 >
                   <div className="relative">
                     <img
@@ -871,7 +891,7 @@ export default function Home() {
               {trendingHairstyles.map((style) => (
                 <div
                   key={style.id}
-                  className="min-w-[260px] max-w-[260px] rounded-2xl overflow-hidden group relative"
+                  className="min-w-[220px] max-w-[220px] rounded-2xl overflow-hidden group relative"
                 >
                   <img
                     src={style.image}

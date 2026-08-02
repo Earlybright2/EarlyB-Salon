@@ -6,6 +6,7 @@ import CartDrawer from "@/components/CartDrawer";
 import WishlistDrawer from "@/components/WishlistDrawer";
 import AIChatbot from "@/components/AIChatbot";
 import Home from "./pages/Home";
+import About from "./pages/About";
 import Shop from "./pages/Shop";
 import ProductDetail from "./pages/ProductDetail";
 import Salons from "./pages/Salons";
@@ -26,6 +27,7 @@ export default function App() {
           <AIChatbot />
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/about-us" element={<About />} />
             <Route path="/shop" element={<Shop />} />
             <Route path="/shop/:id" element={<ProductDetail />} />
             <Route path="/salons" element={<Salons />} />
