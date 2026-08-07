@@ -16,13 +16,14 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     if (qs) url += `?${qs}`;
   }
 
+  const isFormData = body instanceof FormData;
   const response = await fetch(url, {
     credentials: "include",
     headers: {
-      ...(body ? { "Content-Type": "application/json" } : {}),
+      ...(body && !isFormData ? { "Content-Type": "application/json" } : {}),
       ...(headers as Record<string, string>),
     },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: isFormData ? body : body !== undefined ? JSON.stringify(body) : undefined,
     ...rest,
   });
 

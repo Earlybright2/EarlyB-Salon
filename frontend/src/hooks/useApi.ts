@@ -27,7 +27,9 @@ export function useApiMutation<TData = unknown, TVariables = unknown>(
   options?: Omit<UseMutationOptions<TData, Error, TVariables>, "mutationFn">,
 ) {
   const queryClient = useQueryClient();
+  const { onSuccess: userOnSuccess, ...restOptions } = options ?? {};
   return useMutation<TData, Error, TVariables>({
+    ...restOptions,
     mutationFn: (variables) => {
       const resolvedPath =
         typeof path === "function" ? path(variables) : path;
@@ -36,9 +38,8 @@ export function useApiMutation<TData = unknown, TVariables = unknown>(
         : api.post<TData>(resolvedPath, variables as unknown)) as Promise<TData>;
     },
     onSuccess: (...args) => {
-      options?.onSuccess?.(...args);
+      userOnSuccess?.(...args);
       queryClient.invalidateQueries();
     },
-    ...options,
   });
 }

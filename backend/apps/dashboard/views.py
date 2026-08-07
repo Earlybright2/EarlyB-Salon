@@ -1,5 +1,9 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
+import calendar
+import threading
 
+from django.conf import settings
+from django.core.mail import send_mail
 from django.db.models import Count, Q, Sum
 from django.utils import timezone
 from rest_framework import status
@@ -8,7 +12,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.shop.models import (
+    AiRecommendation,
     Appointment,
+    Hairstyle,
     Product,
     Review,
     Salon,
@@ -167,6 +173,62 @@ class PendingKycListView(APIView):
         return Response(StylistSerializer(stylists, many=True).data)
 
 
+class AllVerifiedSalonsView(APIView):
+    permission_classes = [IsAuthenticated, IsVerificationAdmin]
+
+    def get(self, request):
+        salons = Salon.objects.order_by("-created_at")
+        data = [
+            {
+                "id": salon.id,
+                "businessName": salon.business_name,
+                "city": salon.city,
+                "state": salon.state,
+                "country": salon.country,
+                "ownerId": salon.owner_id,
+                "isVerified": salon.is_verified,
+                "isActive": salon.is_active,
+                "createdAt": salon.created_at,
+            }
+            for salon in salons
+        ]
+        return Response(data)
+
+
+class ManageSalonVerificationView(APIView):
+    permission_classes = [IsAuthenticated, IsVerificationAdmin]
+
+    def post(self, request, pk):
+        verified = bool(request.data.get("verified", False))
+        Salon.objects.filter(pk=pk).update(is_verified=verified)
+        return Response({"success": True})
+
+
+def _send_welcome_email(email: str, name: str) -> None:
+    subject = "Welcome to Early Bright"
+    message = (
+        f"Hi {name},\n\n"
+        "Congratulations! Your KYC has been approved and your profile is now live on Early Bright. "
+        "We’re excited to help you connect with more clients."
+    )
+    try:
+        send_mail(
+            subject,
+            message,
+            settings.DEFAULT_FROM_EMAIL,
+            [email],
+            fail_silently=True,
+        )
+    except Exception:
+        pass
+
+
+def _schedule_welcome_email(email: str, name: str, delay_seconds: int = 1200) -> None:
+    timer = threading.Timer(delay_seconds, _send_welcome_email, args=(email, name))
+    timer.daemon = True
+    timer.start()
+
+
 class ApproveKycView(APIView):
     permission_classes = [IsAuthenticated, IsVerificationAdmin]
 
@@ -176,6 +238,22 @@ class ApproveKycView(APIView):
         if approved:
             update["kyc_approved_at"] = timezone.now()
         Stylist.objects.filter(pk=pk).update(**update)
+
+        if approved:
+            stylist = Stylist.objects.filter(pk=pk).select_related("user").first()
+            if stylist and stylist.user and stylist.user.email:
+                send_mail(
+                    "Your KYC has been approved",
+                    (
+                        f"Hi {stylist.user.name or 'there'},\n\n"
+                        "Your KYC documents have been approved. Your profile is now verified and visible to clients on Early Bright."
+                    ),
+                    settings.DEFAULT_FROM_EMAIL,
+                    [stylist.user.email],
+                    fail_silently=True,
+                )
+                _schedule_welcome_email(stylist.user.email, stylist.user.name or "Stylist")
+
         return Response({"success": True})
 
 
@@ -235,6 +313,22 @@ class PendingDisputesView(APIView):
         return Response(AppointmentSerializer(appointments, many=True).data)
 
 
+class ResolveDisputeView(APIView):
+    permission_classes = [IsAuthenticated, IsSupportAdmin]
+
+    def post(self, request, pk):
+        status_choice = request.data.get("status")
+        if status_choice not in {"refunded", "paid"}:
+            return Response(
+                {"error": "Invalid resolution status."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        Appointment.objects.filter(pk=pk, payment_status="disputed").update(
+            payment_status=status_choice, status="completed"
+        )
+        return Response({"success": True})
+
+
 class FlaggedReviewsView(APIView):
     permission_classes = [IsAuthenticated, IsContentAdmin]
 
@@ -268,5 +362,95 @@ class PlatformStatsView(APIView):
             {
                 "weeklyBookings": weekly_bookings,
                 "activeUsers30d": active_users_30d,
+            }
+        )
+
+
+class PlatformAnalyticsView(APIView):
+    """Real, aggregated platform analytics for the admin dashboard."""
+
+    permission_classes = [IsAuthenticated, IsAdminRole]
+
+    def get(self, request):
+        now = timezone.now()
+
+        daily_bookings = Appointment.objects.filter(
+            created_at__gte=now - timedelta(days=1)
+        ).count()
+
+        bookings_by_day = []
+        for offset in range(6, -1, -1):
+            day = (now - timedelta(days=offset)).date()
+            bookings_by_day.append(
+                {
+                    "day": day.strftime("%a"),
+                    "bookings": Appointment.objects.filter(
+                        created_at__date=day
+                    ).count(),
+                }
+            )
+
+        users_by_role = [
+            {"role": entry["role"] or "unknown", "count": entry["total"]}
+            for entry in User.objects.values("role").annotate(total=Count("id"))
+        ]
+
+        product_sales = [
+            {
+                "name": product.name,
+                "reviews": product.total_reviews,
+                "price": str(product.price),
+                "stockQuantity": product.stock_quantity,
+                "category": product.category,
+                "imageUrl": product.photos or None,
+            }
+            for product in Product.objects.order_by("-total_reviews")[:6]
+        ]
+
+        popular_hairstyles = [
+            {
+                "id": h.id,
+                "name": h.name,
+                "category": h.category,
+                "trendScore": h.trend_score,
+                "genderTarget": h.gender_target,
+                "imageUrl": h.thumbnail_url or None,
+            }
+            for h in Hairstyle.objects.order_by("-trend_score")[:8]
+        ]
+
+        monthly_revenue = []
+        for offset in range(5, -1, -1):
+            year = now.year
+            month = now.month - offset
+            while month <= 0:
+                month += 12
+                year -= 1
+            month_start = timezone.make_aware(datetime(year, month, 1))
+            _, last_day = calendar.monthrange(year, month)
+            month_end = month_start + timedelta(days=last_day)
+            total = (
+                Appointment.objects.filter(
+                    created_at__gte=month_start,
+                    created_at__lt=month_end,
+                    payment_status="paid",
+                ).aggregate(total=Sum("total_amount"))["total"]
+                or 0
+            )
+            monthly_revenue.append(
+                {"month": month_start.strftime("%b"), "revenue": float(total)}
+            )
+
+        ai_usage = AiRecommendation.objects.count()
+
+        return Response(
+            {
+                "dailyBookings": daily_bookings,
+                "bookingsByDay": bookings_by_day,
+                "usersByRole": users_by_role,
+                "productSales": product_sales,
+                "popularHairstyles": popular_hairstyles,
+                "monthlyRevenue": monthly_revenue,
+                "aiUsage": ai_usage,
             }
         )

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { useCart } from "@/hooks/useCart";
@@ -15,6 +15,12 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const navLinks = [
   { href: "/about-us", label: "About" },
@@ -42,11 +48,31 @@ const navLinks = [
 export default function Navigation() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { user, isAuthenticated, logout } = useAuth();
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { user, isAuthenticated, isLoading, logout } = useAuth();
   const { totalItems, setIsCartOpen } = useCart();
   const { totalItems: wishlistCount, setIsWishlistOpen } = useWishlist();
   const location = useLocation();
-  const isAdmin = user?.role !== "user" && !!user?.role;
+  const adminRoles = [
+    "admin",
+    "super_admin",
+    "verification_admin",
+    "finance_admin",
+    "support_admin",
+    "content_admin",
+  ];
+  const isAdmin = !!user?.role && adminRoles.includes(user.role);
+  const userRole = user?.role as string | undefined;
+  const dashboardPath = isAdmin
+    ? "/admin"
+    : userRole === "barber"
+    ? "/barber/dashboard"
+    : userRole === "stylist"
+    ? "/stylist/dashboard"
+    : "/";
+  const profilePath = "/profile";
+  const settingsPath = "/settings";
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
@@ -57,6 +83,25 @@ export default function Navigation() {
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname]);
+
+  const openAvatarMenu = () => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+    setAvatarMenuOpen(true);
+  };
+
+  const scheduleAvatarClose = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => setAvatarMenuOpen(false), 150);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current);
+    };
+  }, []);
 
   return (
     <header
@@ -139,7 +184,12 @@ export default function Navigation() {
               )}
             </button>
 
-            {isAuthenticated ? (
+            {isLoading ? (
+              <div className="hidden md:flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-white/10 animate-pulse" />
+                <div className="hidden xl:block h-4 w-24 rounded-full bg-white/10 animate-pulse" />
+              </div>
+            ) : isAuthenticated ? (
               <div className="hidden md:flex items-center gap-2">
                 {isAdmin && (
                   <Link
@@ -150,41 +200,94 @@ export default function Navigation() {
                     <ShieldCheck className="h-5 w-5" />
                   </Link>
                 )}
-                <div className="flex items-center gap-2 pl-2 border-l border-white/10">
-                  {user?.avatar ? (
-                    <img
-                      src={user.avatar}
-                      alt={user.name || "User"}
-                      className="h-8 w-8 rounded-full object-cover ring-1 ring-ebs-gold/30"
-                    />
-                  ) : (
-                    <div className="h-8 w-8 rounded-full bg-ebs-gold/20 flex items-center justify-center">
-                      <User className="h-4 w-4 text-ebs-gold" />
-                    </div>
-                  )}
-                  <span className="text-sm text-ebs-text-secondary hidden xl:block">
-                    {user?.name?.split(" ")[0] || "User"}
-                  </span>
-                  <button
-                    onClick={logout}
-                    className="p-1.5 text-ebs-text-muted hover:text-ebs-error transition-colors"
-                    title="Logout"
+                <DropdownMenu open={avatarMenuOpen} onOpenChange={setAvatarMenuOpen}>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      onMouseEnter={openAvatarMenu}
+                      onMouseLeave={scheduleAvatarClose}
+                      className="flex items-center gap-2 pl-2 border-l border-white/10 text-ebs-text-secondary hover:text-ebs-text transition-colors"
+                    >
+                      {user?.avatar ? (
+                        <img
+                          src={user.avatar}
+                          alt={user.name || "User"}
+                          className="h-8 w-8 rounded-full object-cover ring-1 ring-ebs-gold/30"
+                        />
+                      ) : (
+                        <div className="h-8 w-8 rounded-full bg-ebs-gold/20 flex items-center justify-center">
+                          <User className="h-4 w-4 text-ebs-gold" />
+                        </div>
+                      )}
+                      <span className="text-sm text-ebs-text-secondary hidden xl:block">
+                        {user?.name?.split(" ")[0] || "User"}
+                      </span>
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    onMouseEnter={openAvatarMenu}
+                    onMouseLeave={scheduleAvatarClose}
+                    className="w-64"
                   >
-                    <LogOut className="h-4 w-4" />
-                  </button>
-                </div>
+                    <DropdownMenuItem asChild>
+                      <Link
+                        to={profilePath}
+                        className="block w-full rounded-xl px-4 py-2 text-sm font-medium text-ebs-text-secondary hover:bg-ebs-bg-elevated hover:text-ebs-text transition-colors"
+                      >
+                        Profile
+                      </Link>
+                    </DropdownMenuItem>
+                    {!isAdmin && (
+                      <DropdownMenuItem asChild>
+                        <Link
+                          to="/auth/kyc"
+                          className="block w-full rounded-xl px-4 py-2 text-sm font-medium text-ebs-text-secondary hover:bg-ebs-bg-elevated hover:text-ebs-text transition-colors"
+                        >
+                          KYC Status
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem asChild>
+                      <Link
+                        to={dashboardPath}
+                        className="block w-full rounded-xl px-4 py-2 text-sm font-medium text-ebs-text-secondary hover:bg-ebs-bg-elevated hover:text-ebs-text transition-colors"
+                      >
+                        Dashboard
+                      </Link>
+                    </DropdownMenuItem>
+                    {!isAdmin && (
+                      <DropdownMenuItem asChild>
+                        <Link
+                          to={settingsPath}
+                          className="block w-full rounded-xl px-4 py-2 text-sm font-medium text-ebs-text-secondary hover:bg-ebs-bg-elevated hover:text-ebs-text transition-colors"
+                        >
+                          Settings
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <button
+                  type="button"
+                  onClick={logout}
+                  title="Logout"
+                  className="p-1.5 text-ebs-text-muted hover:text-ebs-error transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
               </div>
             ) : (
               <div className="hidden md:flex items-center gap-3">
                 <Link
-                  to="/login"
+                  to="/auth/login"
                   className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-ebs-text hover:text-ebs-gold transition-colors"
                 >
                   <User className="h-4 w-4" />
                   Sign In
                 </Link>
                 <Link
-                  to="/register"
+                  to="/auth/signup"
                   className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-ebs-bg bg-gradient-gold rounded-lg hover:shadow-gold transition-shadow"
                 >
                   Get Started
@@ -267,7 +370,7 @@ export default function Navigation() {
                       </div>
                     ) : (
                       <Link
-                        to="/login"
+                        to="/auth/login"
                         className="flex items-center justify-center gap-2 w-full py-3 text-sm font-semibold text-ebs-bg bg-gradient-gold rounded-lg"
                       >
                         <User className="h-4 w-4" />

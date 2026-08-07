@@ -40,6 +40,10 @@ class Stylist(models.Model):
     total_reviews = models.IntegerField(default=0)
     total_earnings = models.DecimalField(max_digits=15, decimal_places=2, default="0")
     wallet_balance = models.DecimalField(max_digits=15, decimal_places=2, default="0")
+    government_id = models.FileField(upload_to="kyc/documents/government_id/", null=True, blank=True)
+    business_certificate = models.FileField(upload_to="kyc/documents/business_certificate/", null=True, blank=True)
+    utility_bill = models.FileField(upload_to="kyc/documents/utility_bill/", null=True, blank=True)
+    salon_photo = models.FileField(upload_to="kyc/documents/salon_photo/", null=True, blank=True)
     is_featured = models.BooleanField(default=False)
     subscription_plan = models.CharField(
         max_length=20, choices=SubscriptionPlan.choices, default=SubscriptionPlan.FREE

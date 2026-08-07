@@ -37,6 +37,8 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser, PermissionsMixin):
     class Role(models.TextChoices):
         USER = "user", "User"
+        BARBER = "barber", "Barber"
+        STYLIST = "stylist", "Stylist"
         ADMIN = "admin", "Admin"
         SUPER_ADMIN = "super_admin", "Super Admin"
         VERIFICATION_ADMIN = "verification_admin", "Verification Admin"

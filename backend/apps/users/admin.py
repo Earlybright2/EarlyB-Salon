@@ -16,7 +16,7 @@ class CustomUserAdmin(UserAdmin):
         ("Personal info", {"fields": ("name", "avatar", "phone_number", "gender", "date_of_birth")}),
         ("Hair profile", {"fields": ("hair_type", "face_shape", "hairline_stage", "skin_tone")}),
         ("Permissions", {"fields": ("role", "is_active", "is_suspended", "is_verified", "is_staff", "is_superuser", "groups", "user_permissions")}),
-        ("Important dates", {"fields": ("last_login", "last_login_at", "date_joined")}),
+        ("Important dates", {"fields": ("last_login", "last_login_at", "created_at")}),
     )
     add_fieldsets = (
         (
@@ -27,4 +27,4 @@ class CustomUserAdmin(UserAdmin):
             },
         ),
     )
-    readonly_fields = ["created_at", "updated_at"]
+    readonly_fields = ["last_login_at", "created_at", "updated_at"]

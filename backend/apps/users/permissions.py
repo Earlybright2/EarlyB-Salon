@@ -10,11 +10,19 @@ ADMIN_ROLES = {
 }
 
 
+def _is_admin_user(user) -> bool:
+    return bool(
+        user
+        and user.is_authenticated
+        and (user.is_staff or user.is_superuser or user.role in ADMIN_ROLES)
+    )
+
+
 class IsAdminRole(BasePermission):
     message = "Insufficient permissions"
 
     def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and request.user.role in ADMIN_ROLES)
+        return _is_admin_user(request.user)
 
 
 class IsRole(BasePermission):
@@ -25,7 +33,9 @@ class IsRole(BasePermission):
             request.user
             and request.user.is_authenticated
             and (
-                request.user.role == self.role
+                request.user.is_staff
+                or request.user.is_superuser
+                or request.user.role == self.role
                 or request.user.role == "super_admin"
             )
         )

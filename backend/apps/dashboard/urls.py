@@ -28,9 +28,20 @@ urlpatterns = [
         views.ApproveKycView.as_view(),
         name="admin-kyc-approve",
     ),
+    path("salons", views.AllVerifiedSalonsView.as_view(), name="admin-salons"),
+    path(
+        "salons/<int:pk>/verify",
+        views.ManageSalonVerificationView.as_view(),
+        name="admin-salons-verify",
+    ),
     path("revenue", views.RevenueStatsView.as_view(), name="admin-revenue"),
     path("transactions", views.AllTransactionsView.as_view(), name="admin-transactions"),
     path("disputes", views.PendingDisputesView.as_view(), name="admin-disputes"),
+    path(
+        "disputes/<int:pk>/resolve",
+        views.ResolveDisputeView.as_view(),
+        name="admin-disputes-resolve",
+    ),
     path("reviews", views.FlaggedReviewsView.as_view(), name="admin-reviews"),
     path(
         "reviews/<int:pk>/moderate",
@@ -38,4 +49,5 @@ urlpatterns = [
         name="admin-moderate-review",
     ),
     path("platform-stats", views.PlatformStatsView.as_view(), name="admin-platform-stats"),
+    path("analytics", views.PlatformAnalyticsView.as_view(), name="admin-analytics"),
 ]

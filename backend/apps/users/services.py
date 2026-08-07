@@ -8,6 +8,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from apps.users.models import User
+from apps.users.permissions import ADMIN_ROLES
 
 SESSION_COOKIE_NAME = "session_id"
 
@@ -34,6 +35,7 @@ def create_user(data: Dict[str, Any]) -> User:
         name=data.get("name"),
         avatar=data.get("avatar"),
         role=data.get("role", "user"),
+        gender=data.get("gender"),
         auth_provider=data.get("auth_provider", "email"),
     )
     password = data.get("password_hash")
@@ -42,6 +44,12 @@ def create_user(data: Dict[str, Any]) -> User:
     else:
         user.set_unusable_password()
     user.save()
+
+    if user.role in {"barber", "stylist"}:
+        from apps.shop.models import Stylist
+
+        Stylist.objects.create(user=user, display_name=user.name)
+
     return user
 
 
@@ -89,6 +97,83 @@ def login_with_email(email: str, password: str) -> User:
         raise serializers.ValidationError(
             {"detail": {"message": "Invalid email or password."}}
         )
+    return user
+
+
+SPECIALIZED_ADMIN_ROLES = {
+    "verification_admin",
+    "finance_admin",
+    "support_admin",
+    "content_admin",
+}
+
+ASSIGNABLE_ROLE_OPTIONS = {
+    "verification_admin": "verification_admin",
+    "finance_admin": "finance_admin",
+    "support_admin": "support_admin",
+    "content_admin": "content_admin",
+    "super_admin": "super_admin",
+}
+
+
+def admin_login_with_email(
+    email: str, password: str, role: Optional[str] = None
+) -> User:
+    normalized_email = email.strip().lower()
+    user = find_user_by_email(normalized_email)
+    if user is None or not user.has_usable_password():
+        raise serializers.ValidationError(
+            {"detail": {"message": "Invalid email or password."}}
+        )
+    if not check_password(password, user.password):
+        raise serializers.ValidationError(
+            {"detail": {"message": "Invalid email or password."}}
+        )
+    if not user.is_staff:
+        raise serializers.ValidationError(
+            {"detail": {"message": "You do not have permission to access the admin portal."}}
+        )
+
+    selected = (role or "").strip() or (
+        ("super_admin" if user.is_superuser else "")
+    )
+
+    if user.is_superuser:
+        # Superusers are the only accounts allowed to hold a super admin role.
+        if selected not in {"admin", "super_admin", ""}:
+            raise serializers.ValidationError(
+                {"detail": {"message": "Superusers must sign in with the Super Admin role."}}
+            )
+        selected = selected or "super_admin"
+        if user.role not in {"admin", "super_admin"}:
+            user.role = selected
+            user.save(update_fields=["role"])
+        return user
+
+    # Staff accounts (created via the Django admin site).
+    if selected == "super_admin":
+        raise serializers.ValidationError(
+            {"detail": {"message": "Only superusers can access the Super Admin role."}}
+        )
+    if selected not in ASSIGNABLE_ROLE_OPTIONS:
+        raise serializers.ValidationError(
+            {"detail": {"message": "Please choose a valid admin role."}}
+        )
+    # A role can be chosen only once — it cannot be changed afterwards.
+    if user.role in ADMIN_ROLES and user.role != selected:
+        raise serializers.ValidationError(
+            {
+                "detail": {
+                    "message": (
+                        f"Role already assigned to this account "
+                        f"({selected}) and cannot be changed."
+                    )
+                }
+            }
+        )
+    if user.role not in ADMIN_ROLES:
+        user.role = selected
+        user.save(update_fields=["role"])
     return user
 
 
@@ -163,5 +248,4 @@ def clear_session_cookie(response, host: str = "") -> None:
         SESSION_COOKIE_NAME,
         path=options["path"],
         samesite=options["samesite"],
-        secure=options["secure"],
     )

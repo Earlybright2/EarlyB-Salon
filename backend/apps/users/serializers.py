@@ -12,6 +12,8 @@ class UserSerializer(serializers.ModelSerializer):
     isVerified = serializers.BooleanField(source="is_verified", read_only=True)
     isActive = serializers.BooleanField(source="is_active", read_only=True)
     isSuspended = serializers.BooleanField(source="is_suspended", read_only=True)
+    isStaff = serializers.BooleanField(source="is_staff", read_only=True)
+    isSuperuser = serializers.BooleanField(source="is_superuser", read_only=True)
     lastLoginAt = serializers.DateTimeField(source="last_login_at", read_only=True)
     createdAt = serializers.DateTimeField(source="created_at", read_only=True)
     updatedAt = serializers.DateTimeField(source="updated_at", read_only=True)
@@ -48,6 +50,8 @@ class UserSerializer(serializers.ModelSerializer):
             "isVerified",
             "isActive",
             "isSuspended",
+            "isStaff",
+            "isSuperuser",
             "lastLoginAt",
             "createdAt",
             "updatedAt",

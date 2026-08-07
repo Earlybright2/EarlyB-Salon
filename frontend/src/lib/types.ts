@@ -25,6 +25,8 @@ export interface User {
   isVerified?: boolean;
   isActive?: boolean;
   isSuspended?: boolean;
+  isStaff?: boolean;
+  isSuperuser?: boolean;
   lastLoginAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
@@ -121,6 +123,10 @@ export interface Stylist {
   kycStatus?: string;
   kycSubmittedAt?: string | null;
   kycApprovedAt?: string | null;
+  governmentIdUrl?: string | null;
+  businessCertificateUrl?: string | null;
+  utilityBillUrl?: string | null;
+  salonPhotoUrl?: string | null;
   averageRating?: string;
   totalReviews?: number;
   totalEarnings?: string;
@@ -181,6 +187,55 @@ export interface Transaction {
 export interface PlatformStats {
   weeklyBookings: number;
   activeUsers30d: number;
+}
+
+export interface RevenueStats {
+  totalRevenue: string;
+  pendingPayouts: string;
+  totalOrdersRevenue: string;
+}
+
+export interface BookingByDay {
+  day: string;
+  bookings: number;
+}
+
+export interface UsersByRole {
+  role: string;
+  count: number;
+}
+
+export interface ProductSale {
+  name: string;
+  reviews: number;
+  price: string;
+  stockQuantity: number;
+  category?: string | null;
+  imageUrl?: string | null;
+}
+
+export interface PopularHairstyle {
+  id: number;
+  name: string;
+  category?: string | null;
+  trendScore: number;
+  genderTarget?: string;
+  imageUrl?: string | null;
+}
+
+export interface MonthlyRevenue {
+  month: string;
+  revenue: number;
+}
+
+export interface AdminAnalytics {
+  dailyBookings: number;
+  bookingsByDay: BookingByDay[];
+  usersByRole: UsersByRole[];
+  productSales: ProductSale[];
+  popularHairstyles: PopularHairstyle[];
+  monthlyRevenue: MonthlyRevenue[];
+  aiUsage: number;
 }
 
 export interface Hero {

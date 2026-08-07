@@ -215,10 +215,16 @@ class StylistSerializer(serializers.ModelSerializer):
     kycSubmittedAt = serializers.DateTimeField(source="kyc_submitted_at", read_only=True)
     kycApprovedAt = serializers.DateTimeField(source="kyc_approved_at", read_only=True)
     averageRating = serializers.DecimalField(source="average_rating", max_digits=3, decimal_places=2, read_only=True)
+    totalReviews = serializers.IntegerField(source="total_reviews", read_only=True)
     totalEarnings = serializers.DecimalField(source="total_earnings", max_digits=15, decimal_places=2, read_only=True)
     subscriptionPlan = serializers.CharField(source="subscription_plan", read_only=True)
     isFeatured = serializers.BooleanField(source="is_featured", read_only=True)
     createdAt = serializers.DateTimeField(source="created_at", read_only=True)
+
+    governmentIdUrl = serializers.SerializerMethodField()
+    businessCertificateUrl = serializers.SerializerMethodField()
+    utilityBillUrl = serializers.SerializerMethodField()
+    salonPhotoUrl = serializers.SerializerMethodField()
 
     class Meta:
         model = Stylist
@@ -230,6 +236,10 @@ class StylistSerializer(serializers.ModelSerializer):
             "kycStatus",
             "kycSubmittedAt",
             "kycApprovedAt",
+            "governmentIdUrl",
+            "businessCertificateUrl",
+            "utilityBillUrl",
+            "salonPhotoUrl",
             "averageRating",
             "totalReviews",
             "totalEarnings",
@@ -237,6 +247,26 @@ class StylistSerializer(serializers.ModelSerializer):
             "isFeatured",
             "createdAt",
         ]
+
+    def get_governmentIdUrl(self, obj):
+        return self._build_file_url(obj.government_id)
+
+    def get_businessCertificateUrl(self, obj):
+        return self._build_file_url(obj.business_certificate)
+
+    def get_utilityBillUrl(self, obj):
+        return self._build_file_url(obj.utility_bill)
+
+    def get_salonPhotoUrl(self, obj):
+        return self._build_file_url(obj.salon_photo)
+
+    def _build_file_url(self, file_field):
+        if not file_field:
+            return None
+        request = self.context.get("request")
+        if request is not None:
+            return request.build_absolute_uri(file_field.url)
+        return file_field.url
 
 
 class AppointmentSerializer(serializers.ModelSerializer):

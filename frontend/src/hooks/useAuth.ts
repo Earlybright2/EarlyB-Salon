@@ -30,8 +30,7 @@ export function useAuth(options?: UseAuthOptions) {
     "post",
     {
       onSuccess: async () => {
-        navigate(redirectPath);
-        window.location.reload();
+        window.location.assign(redirectPath);
       },
     },
   );
