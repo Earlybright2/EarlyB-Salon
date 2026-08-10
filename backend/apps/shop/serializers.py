@@ -4,13 +4,18 @@ from rest_framework import serializers
 
 from apps.shop.models import (
     Appointment,
+    CartItem,
     Hairstyle,
     Hero,
+    Notification,
+    Order,
+    OrderItem,
     Product,
     Review,
     Salon,
     Service,
     Stylist,
+    WishlistItem,
 )
 
 
@@ -205,6 +210,50 @@ class AppointmentSerializer(serializers.ModelSerializer):
         ]
 
 
+class AppointmentDetailSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(read_only=True)
+    bookingReference = serializers.CharField(source="booking_reference", read_only=True)
+    userId = serializers.IntegerField(source="user_id", read_only=True)
+    stylistId = serializers.IntegerField(source="stylist_id", read_only=True)
+    salonId = serializers.IntegerField(source="salon_id", read_only=True)
+    serviceId = serializers.IntegerField(source="service_id", read_only=True)
+    scheduledAt = serializers.DateTimeField(source="scheduled_at", read_only=True)
+    durationMinutes = serializers.IntegerField(source="duration_minutes", read_only=True)
+    userNotes = serializers.CharField(source="user_notes", read_only=True)
+    totalAmount = serializers.DecimalField(source="total_amount", max_digits=12, decimal_places=2, read_only=True)
+    platformFee = serializers.DecimalField(source="platform_fee", max_digits=12, decimal_places=2, read_only=True)
+    stylistAmount = serializers.DecimalField(source="stylist_amount", max_digits=12, decimal_places=2, read_only=True)
+    paymentStatus = serializers.CharField(source="payment_status", read_only=True)
+    cancelledAt = serializers.DateTimeField(source="cancelled_at", read_only=True)
+    cancellationReason = serializers.CharField(source="cancellation_reason", read_only=True)
+    completedAt = serializers.DateTimeField(source="completed_at", read_only=True)
+    createdAt = serializers.DateTimeField(source="created_at", read_only=True)
+    serviceName = serializers.SerializerMethodField()
+    salonName = serializers.SerializerMethodField()
+    stylistName = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Appointment
+        fields = [
+            "id", "bookingReference", "userId", "stylistId", "salonId", "serviceId",
+            "scheduledAt", "durationMinutes", "status", "userNotes", "totalAmount",
+            "platformFee", "stylistAmount", "paymentStatus", "cancelledAt",
+            "cancellationReason", "completedAt", "createdAt",
+            "serviceName", "salonName", "stylistName",
+        ]
+
+    def get_serviceName(self, obj):
+        return obj.service.name if obj.service_id and obj.service else None
+
+    def get_salonName(self, obj):
+        return obj.salon.business_name if obj.salon_id and obj.salon else None
+
+    def get_stylistName(self, obj):
+        if obj.stylist_id and obj.stylist:
+            return obj.stylist.display_name or f"Stylist {obj.stylist_id}"
+        return None
+
+
 class ReviewSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(read_only=True)
     targetType = serializers.CharField(source="target_type", read_only=True)
@@ -219,6 +268,74 @@ class ReviewSerializer(serializers.ModelSerializer):
             "id", "rating", "title", "body", "targetType", "targetId",
             "isVerified", "isFeatured", "createdAt",
         ]
+
+
+class CartItemSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(read_only=True)
+    productId = serializers.IntegerField(source="product_id", read_only=True)
+    quantity = serializers.IntegerField()
+    product = ProductSerializer(read_only=True)
+    lineTotal = serializers.SerializerMethodField()
+    createdAt = serializers.DateTimeField(source="created_at", read_only=True)
+    updatedAt = serializers.DateTimeField(source="updated_at", read_only=True)
+
+    class Meta:
+        model = CartItem
+        fields = ["id", "productId", "quantity", "product", "lineTotal", "createdAt", "updatedAt"]
+
+    def get_lineTotal(self, obj):
+        if not obj.product:
+            return "0.00"
+        return str(obj.product.price * obj.quantity)
+
+
+class WishlistItemSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(read_only=True)
+    productId = serializers.IntegerField(source="product_id", read_only=True)
+    product = ProductSerializer(read_only=True)
+    createdAt = serializers.DateTimeField(source="created_at", read_only=True)
+
+    class Meta:
+        model = WishlistItem
+        fields = ["id", "productId", "product", "createdAt"]
+
+
+class OrderItemSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(read_only=True)
+    productId = serializers.IntegerField(source="product_id", read_only=True)
+    unitPrice = serializers.DecimalField(source="unit_price", max_digits=10, decimal_places=2, read_only=True)
+    totalPrice = serializers.DecimalField(source="total_price", max_digits=10, decimal_places=2, read_only=True)
+    product = ProductSerializer(read_only=True)
+
+    class Meta:
+        model = OrderItem
+        fields = ["id", "productId", "quantity", "unitPrice", "totalPrice", "product"]
+
+
+class OrderSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(read_only=True)
+    orderNumber = serializers.CharField(source="order_number", read_only=True)
+    totalAmount = serializers.DecimalField(source="total_amount", max_digits=12, decimal_places=2, read_only=True)
+    shippingAddress = serializers.CharField(source="shipping_address", read_only=True)
+    items = OrderItemSerializer(many=True, read_only=True)
+    createdAt = serializers.DateTimeField(source="created_at", read_only=True)
+
+    class Meta:
+        model = Order
+        fields = [
+            "id", "orderNumber", "totalAmount", "status", "shippingAddress", "items", "createdAt",
+        ]
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(read_only=True)
+    isRead = serializers.BooleanField(source="is_read", read_only=True)
+    readAt = serializers.DateTimeField(source="read_at", read_only=True)
+    createdAt = serializers.DateTimeField(source="created_at", read_only=True)
+
+    class Meta:
+        model = Notification
+        fields = ["id", "type", "title", "message", "data", "isRead", "readAt", "createdAt"]
 
 
 class HeroSerializer(serializers.ModelSerializer):
