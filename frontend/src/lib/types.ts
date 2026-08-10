@@ -1,5 +1,7 @@
 export type Role =
   | "user"
+  | "barber"
+  | "stylist"
   | "admin"
   | "super_admin"
   | "verification_admin"
@@ -107,11 +109,11 @@ export interface Hairstyle {
   faceShapes?: string | null;
   hairTypes?: string | null;
   thumbnailUrl?: string | null;
-  imageUrl?: string | null;
   trendScore?: number;
   isCelebrity?: boolean;
   celebrityName?: string | null;
   tags?: string | null;
+  imageUrl?: string | null;
   createdAt?: string;
 }
 

@@ -9,6 +9,7 @@ urlpatterns = [
     path("kyc", views.KycView.as_view(), name="auth-kyc"),
     path("me", views.MeView.as_view(), name="auth-me"),
     path("logout", views.LogoutView.as_view(), name="auth-logout"),
+    path("refresh", views.RefreshTokenView.as_view(), name="auth-refresh"),
     path("google", views.GoogleAuthView.as_view(), name="auth-google"),
     path("google/callback", views.GoogleCallbackView.as_view(), name="auth-google-callback"),
     path("apple", views.AppleAuthView.as_view(), name="auth-apple"),

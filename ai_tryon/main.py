@@ -1,14 +1,14 @@
 """
-AI Try-On Module — Main FastAPI Application (v2.0)
+AI Try-On Module — Main FastAPI Application (v3.0)
 Production-ready endpoints with validation, rate limiting, structured logging,
 request ID tracking, and proper error handling.
 
 Endpoints:
   GET  /health                 → health check
   GET  /ai/hairstyles          → catalog (with optional face_shape filter)
-  GET  /ai/hairstyles/recommend → filtered by face_shape
+  GET  /ai/hairstyles/recommend → multi-signal ranking (shape, hairline, density, beard, celebrity)
   GET  /ai/hairstyles/{id}     → single style detail
-  POST /ai/try-on/analyze      → detect face shape from uploaded photo
+  POST /ai/try-on/analyze      → full facial analysis (shape, skin, density, beard, hairline)
   POST /ai/try-on/render       → render hairstyle overlay on photo
   POST /ai/try-on/save         → save result to database
   GET  /ai/try-on/history      → user's saved looks
@@ -47,25 +47,23 @@ from .exceptions import (
     HairstyleNotFoundError,
     InvalidImageError,
 )
-from .face_shape import classify_face_shape
+from .facial_analysis import analyze_full_face
 from .landmark_detector import detect_landmarks
 from .logging_config import logger, set_request_id
 from .overlay import render_overlay_from_landmarks, RenderConfig
+from .recommend import rank_hairstyles
 
 settings = get_settings()
 
-# ─── Rate limiter ─────────────────────────────────────────────────
-
 limiter = Limiter(key_func=get_remote_address)
 
-
-# ─── App lifespan ─────────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("AI Try-On starting up", extra={"extra_data": {
         "log_level": settings.log_level,
         "max_upload_mb": settings.max_upload_bytes // (1024 * 1024),
+        "version": "3.0.0",
     }})
     settings.resolved_upload_dir.mkdir(parents=True, exist_ok=True)
     yield
@@ -75,7 +73,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Early Bright — AI Try-On",
-    version="2.0.0",
+    version="3.0.0",
     lifespan=lifespan,
 )
 
@@ -98,19 +96,14 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
-# ─── Middleware: Request ID tracking ─────────────────────────────
-
 @app.middleware("http")
 async def request_id_middleware(request: Request, call_next):
     rid = request.headers.get(settings.request_id_header) or uuid.uuid4().hex[:12]
     set_request_id(rid)
-
     response = await call_next(request)
     response.headers[settings.request_id_header] = rid
     return response
 
-
-# ─── Exception handlers ───────────────────────────────────────────
 
 @app.exception_handler(AITryOnError)
 async def ai_tryon_error_handler(request: Request, exc: AITryOnError):
@@ -131,28 +124,21 @@ async def ai_tryon_error_handler(request: Request, exc: AITryOnError):
     )
 
 
-# ─── Validation helpers ───────────────────────────────────────────
-
 async def _validate_upload(photo: UploadFile) -> bytes:
-    """Validate file size, MIME type, and image dimensions. Return bytes."""
-    # Check MIME type
     if photo.content_type not in settings.allowed_mime_types:
         raise InvalidImageError(
             f"Unsupported file type: {photo.content_type}. "
             f"Allowed: {', '.join(sorted(settings.allowed_mime_types))}"
         )
 
-    # Read bytes
     image_bytes = await photo.read()
 
-    # Check file size
     if len(image_bytes) > settings.max_upload_bytes:
         raise InvalidImageError(
             f"File too large ({len(image_bytes)} bytes). "
             f"Max: {settings.max_upload_bytes // (1024 * 1024)} MB"
         )
 
-    # Validate image can be decoded and check dimensions
     nparr = np.frombuffer(image_bytes, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     if img is None:
@@ -177,7 +163,6 @@ async def _validate_upload(photo: UploadFile) -> bytes:
 
 
 def _load_hairstyle_asset(asset_url: str) -> bytes | None:
-    """Load a hairstyle sprite from disk (static/hairstyles/) or URL."""
     if not asset_url:
         return None
 
@@ -198,24 +183,31 @@ def _load_hairstyle_asset(asset_url: str) -> bytes | None:
     return None
 
 
-# ─── Health ───────────────────────────────────────────────────────
+def _normalize_catalog(raw) -> list:
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, dict):
+        return raw.get("items") or raw.get("data") or []
+    return []
+
 
 @app.get("/health")
 async def health():
-    """Health check endpoint."""
     return {
         "status": "healthy",
-        "version": "2.0.0",
+        "version": "3.0.0",
         "mediapipe": True,
+        "features": {
+            "full_face_analysis": True,
+            "multi_signal_recommend": True,
+            "client_mediapipe": True,
+        },
     }
 
-
-# ─── Hairstyle catalog ────────────────────────────────────────────
 
 @app.get("/ai/hairstyles")
 @limiter.limit(settings.rate_limit_default)
 async def get_hairstyles(request: Request, face_shape: str | None = None):
-    """GET /ai/hairstyles → catalog. Optional ?face_shape=oval for recommendations."""
     try:
         if face_shape:
             data = await db.fetch_recommended_hairstyles(face_shape)
@@ -231,11 +223,25 @@ async def get_hairstyles(request: Request, face_shape: str | None = None):
 
 @app.get("/ai/hairstyles/recommend")
 @limiter.limit(settings.rate_limit_default)
-async def recommend_hairstyles(request: Request, face_shape: str):
-    """GET /ai/hairstyles/recommend?face_shape=oval → filtered catalog."""
+async def recommend_hairstyles(
+    request: Request,
+    face_shape: str | None = None,
+    hairline_stage: str | None = None,
+    density: str | None = None,
+    beard: str | None = None,
+    celebrity: bool = False,
+):
+    """Multi-signal recommendations. Backward compatible with ?face_shape=oval."""
     try:
-        data = await db.fetch_recommended_hairstyles(face_shape)
-        return data
+        catalog = await db.fetch_hairstyles()
+        items = _normalize_catalog(catalog)
+        analysis = {
+            "face_shape": (face_shape or "OVAL").upper(),
+            "hairline": {"stage": hairline_stage or "normal"},
+            "hair_density": {"level": density or "medium"},
+            "beard": {"style": beard or "unknown"},
+        }
+        return rank_hairstyles(items, analysis, prefer_celebrity=celebrity)
     except Exception as exc:
         if isinstance(exc, AITryOnError):
             raise
@@ -246,7 +252,6 @@ async def recommend_hairstyles(request: Request, face_shape: str):
 @app.get("/ai/hairstyles/{hairstyle_id}")
 @limiter.limit(settings.rate_limit_default)
 async def get_hairstyle(request: Request, hairstyle_id: str):
-    """GET /ai/hairstyles/{id} → single style detail."""
     try:
         data = await db.fetch_hairstyle(hairstyle_id)
         if not data:
@@ -259,42 +264,36 @@ async def get_hairstyle(request: Request, hairstyle_id: str):
         raise HTTPException(status_code=500, detail="Failed to fetch hairstyle") from exc
 
 
-# ─── Face analysis ────────────────────────────────────────────────
-
 @app.post("/ai/try-on/analyze")
 @limiter.limit(settings.rate_limit_analyze)
 async def analyze_face(request: Request, photo: UploadFile = File(...)):
-    """POST /ai/try-on/analyze → detect face shape from uploaded photo.
-
-    Uses MediaPipe Face Landmarker (468-point model) for detection.
-    Returns face shape, confidence, and raw geometric ratios.
-    """
+    """Full PRD facial analysis: shape, skin tone, density, beard, hairline."""
     image_bytes = await _validate_upload(photo)
 
     try:
-        result = classify_face_shape(image_bytes)
+        full = analyze_full_face(image_bytes)
     except FaceDetectionError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    if result is None:
+    if full is None:
         raise HTTPException(
             status_code=422,
             detail="No face detected in the image. Please use a clear front-facing photo.",
         )
 
-    logger.info("Face analyzed", extra={"extra_data": {
-        "face_shape": result.face_shape,
-        "confidence": result.confidence,
+    payload = full.to_dict()
+    payload["confidence"] = payload.get("face_shape_confidence")
+    payload["ratios"] = payload.get("face_shape_ratios")
+
+    logger.info("Full face analyzed", extra={"extra_data": {
+        "face_shape": payload.get("face_shape"),
+        "skin": (payload.get("skin_tone") or {}).get("label"),
+        "hairline": (payload.get("hairline") or {}).get("stage"),
+        "density": (payload.get("hair_density") or {}).get("level"),
+        "beard": (payload.get("beard") or {}).get("style"),
     }})
+    return payload
 
-    return {
-        "face_shape": result.face_shape,
-        "confidence": result.confidence,
-        "ratios": result.ratios,
-    }
-
-
-# ─── Overlay rendering ───────────────────────────────────────────
 
 @app.post("/ai/try-on/render")
 @limiter.limit(settings.rate_limit_render)
@@ -303,14 +302,8 @@ async def try_on_render(
     photo: UploadFile = File(...),
     hairstyle_id: str = Form(...),
 ):
-    """POST /ai/try-on/render → render hairstyle overlay on the uploaded photo.
-
-    Uses MediaPipe landmarks for precise positioning and head-pose tracking.
-    Returns a URL to the rendered result image.
-    """
     image_bytes = await _validate_upload(photo)
 
-    # Fetch hairstyle
     try:
         hairstyle = await db.fetch_hairstyle(hairstyle_id)
     except Exception as exc:
@@ -326,7 +319,6 @@ async def try_on_render(
     if hairstyle_bytes is None:
         raise AssetLoadError(f"Hairstyle asset not found: {asset_url}")
 
-    # Detect landmarks
     try:
         landmark_result = detect_landmarks(image_bytes)
     except FaceDetectionError as exc:
@@ -338,7 +330,6 @@ async def try_on_render(
             detail="No face detected in the photo. Please use a clear front-facing photo.",
         )
 
-    # Render overlay
     result_bytes = render_overlay_from_landmarks(
         image_bytes,
         hairstyle_bytes,
@@ -348,15 +339,27 @@ async def try_on_render(
     if result_bytes is None:
         raise HTTPException(status_code=500, detail="Failed to render overlay.")
 
-    # Save result to disk
     result_id = uuid.uuid4().hex[:12]
     result_filename = f"result_{result_id}.jpg"
     result_path = UPLOAD_DIR / result_filename
     result_path.write_bytes(result_bytes)
 
-    # Classify face shape for the response
     from .face_shape import classify_from_landmarks
     face_result = classify_from_landmarks(landmark_result.landmarks_pixels)
+
+    analysis_summary = None
+    try:
+        full = analyze_full_face(image_bytes)
+        if full is not None:
+            analysis_summary = {
+                "face_shape": full.face_shape.face_shape,
+                "skin_tone": full.skin_tone.label,
+                "hair_density": full.hair_density.level,
+                "beard": full.beard.style,
+                "hairline": full.hairline.stage,
+            }
+    except Exception:
+        logger.warning("Optional full analysis on render skipped", exc_info=True)
 
     result_url = f"/static/results/{result_filename}"
 
@@ -374,10 +377,9 @@ async def try_on_render(
         "landmarks_count": len(landmark_result.landmarks),
         "face_width_px": round(landmark_result.face_width_px, 1),
         "face_height_px": round(landmark_result.face_height_px, 1),
+        "analysis": analysis_summary,
     }
 
-
-# ─── Save result ─────────────────────────────────────────────────
 
 @app.post("/ai/try-on/save")
 @limiter.limit(settings.rate_limit_default)
@@ -388,7 +390,6 @@ async def save_try_on(
     face_shape: str = Form(...),
     user_id: str | None = Form(None),
 ):
-    """POST /ai/try-on/save → persist result to Supabase."""
     base_url = str(request.base_url).rstrip("/")
     full_url = (
         f"{base_url}{result_image_url}"
@@ -417,12 +418,9 @@ async def save_try_on(
     return {"success": True, "result": saved}
 
 
-# ─── History ─────────────────────────────────────────────────────
-
 @app.get("/ai/try-on/history")
 @limiter.limit(settings.rate_limit_default)
 async def try_on_history(request: Request, user_id: str | None = None):
-    """GET /ai/try-on/history → user's saved looks."""
     try:
         data = await db.fetch_try_on_history(user_id)
         return data
@@ -433,10 +431,7 @@ async def try_on_history(request: Request, user_id: str | None = None):
         raise HTTPException(status_code=500, detail="Failed to fetch history") from exc
 
 
-# ─── Web UI ──────────────────────────────────────────────────────
-
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    """Serve the web UI."""
     index_path = STATIC_DIR / "index.html"
     return FileResponse(index_path)
