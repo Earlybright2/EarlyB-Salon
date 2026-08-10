@@ -1,5 +1,5 @@
 """
-Django settings for EarlyB Salon (Phase 0 hardened).
+Django settings for EarlyB Salon (Phase 0 hardened + Phase 1.1 Typesense).
 """
 
 from pathlib import Path
@@ -8,7 +8,6 @@ from decouple import Csv, config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# ── Required secrets (crash if missing — no insecure defaults) ─────────────
 SECRET_KEY = config("SECRET_KEY")
 JWT_SECRET = config("JWT_SECRET")
 
@@ -28,6 +27,7 @@ INSTALLED_APPS = [
     "apps.users",
     "apps.shop",
     "apps.dashboard",
+    "apps.search",
 ]
 
 MIDDLEWARE = [
@@ -182,3 +182,9 @@ LOGGING = {
         },
     },
 }
+
+# Typesense search
+TYPESENSE_HOST = config("TYPESENSE_HOST", default="localhost")
+TYPESENSE_PORT = config("TYPESENSE_PORT", default=8108, cast=int)
+TYPESENSE_PROTOCOL = config("TYPESENSE_PROTOCOL", default="http")
+TYPESENSE_API_KEY = config("TYPESENSE_API_KEY", default="xyz")
