@@ -1,18 +1,21 @@
+"""Session JWT authentication with required exp claim."""
+
+from __future__ import annotations
+
+import logging
+
+import jwt
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 
-import jwt
-
 User = get_user_model()
+security_logger = logging.getLogger("earlyb.security")
 
 
 class SessionJWTAuthentication(BaseAuthentication):
-    """
-    Authenticates requests using a JWT stored in the `session_id` httpOnly
-    cookie (replaces the previous Node session flow).
-    """
+    """Authenticates via session_id cookie; rejects expired tokens."""
 
     keyword = "Bearer"
     cookie_name = "session_id"
@@ -24,6 +27,9 @@ class SessionJWTAuthentication(BaseAuthentication):
 
         payload = self._verify_token(token)
         if payload is None:
+            raise AuthenticationFailed("Session expired. Please log in again.")
+
+        if payload.get("type") and payload.get("type") != "access":
             raise AuthenticationFailed("Invalid authentication token.")
 
         union_id = payload.get("unionId")
@@ -35,7 +41,7 @@ class SessionJWTAuthentication(BaseAuthentication):
         except User.DoesNotExist:
             raise AuthenticationFailed("User not found. Please re-login.")
 
-        if not user.is_active or user.is_suspended:
+        if not user.is_active or getattr(user, "is_suspended", False):
             raise AuthenticationFailed("User is not active.")
 
         return (user, token)
@@ -49,7 +55,13 @@ class SessionJWTAuthentication(BaseAuthentication):
                 token,
                 settings.JWT_SECRET,
                 algorithms=[settings.JWT_ALGORITHM],
+                options={"require": ["exp"]},
             )
+        except jwt.ExpiredSignatureError:
+            security_logger.warning(
+                "JWT token expiration — access attempt with expired token"
+            )
+            return None
         except jwt.PyJWTError:
             return None
         if not payload.get("unionId") or not payload.get("clientId"):
