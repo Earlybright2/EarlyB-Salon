@@ -9,7 +9,9 @@ class UserManager(BaseUserManager):
     def _create_user(self, union_id, email, password, **extra_fields):
         if not union_id:
             raise ValueError("The unionId field must be set")
-        email = self.normalize_email(email) if email else None
+        if not email:
+            raise ValueError("Users must have an email address")
+        email = self.normalize_email(email)
         user = self.model(union_id=union_id, email=email, **extra_fields)
         if password:
             user.set_password(password)
@@ -76,7 +78,8 @@ class User(AbstractBaseUser, PermissionsMixin):
     id = models.BigAutoField(primary_key=True)
     union_id = models.CharField(max_length=255, unique=True)
     name = models.CharField(max_length=255, blank=True, null=True)
-    email = models.EmailField(max_length=320, unique=True, null=True, blank=True)
+    # USERNAME_FIELD — must be non-null and unique (Django convention)
+    email = models.EmailField(max_length=320, unique=True)
     password = models.CharField("password", max_length=128)
     avatar = models.TextField(blank=True, null=True)
     role = models.CharField(
