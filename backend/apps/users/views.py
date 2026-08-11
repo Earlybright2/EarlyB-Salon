@@ -320,9 +320,9 @@ class AppleCallbackView(APIView):
         try:
             payload = verify_apple_id_token(id_token, audience=settings.APPLE_CLIENT_ID)
         except jwt.InvalidTokenError as exc:
-            security_logger.warning("Invalid Apple ID token: %s", exp)
+            security_logger.warning("Invalid Apple ID token: %s", exc)
             return Response({"error": "Invalid Apple token"}, status=status.HTTP_401_UNAUTHORIZED)
-        except serializers.ValidationError as exc:
+        except serializers.ValidationError as exp:
             return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
         except Exception as exc:
             security_logger.error("Apple token verification failed: %s", exc)
