@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 import urllib.parse
 import urllib.request
@@ -13,6 +14,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.shop.models import Stylist
+from apps.users.apple_jwt import verify_apple_id_token
 from apps.users.serializers import UserSerializer
 from apps.users.services import (
     admin_login_with_email,
@@ -23,6 +25,8 @@ from apps.users.services import (
     upsert_user,
 )
 
+security_logger = logging.getLogger("earlyb.security")
+
 GOOGLE_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO = "https://www.googleapis.com/oauth2/v3/userinfo"
@@ -31,7 +35,14 @@ APPLE_TOKEN_URL = "https://appleid.apple.com/auth/token"
 
 
 def _oauth_redirect_uri(request, provider: str) -> str:
-    return f"http://{request.get_host()}/api/auth/{provider}/callback"
+    """http only for localhost; https for all other hosts."""
+    host = request.get_host()
+    host_lower = host.lower()
+    if host_lower.startswith(("localhost", "127.0.0.1")):
+        protocol = "http"
+    else:
+        protocol = "https"
+    return f"{protocol}://{host}/api/auth/{provider}/callback"
 
 
 def _post_form(url: str, fields: dict) -> dict:
@@ -236,7 +247,7 @@ class GoogleCallbackView(APIView):
                 "email": email,
                 "name": profile.get("name") or email,
                 "avatar": profile.get("picture"),
-                "role": role if role in {"barber", "stylist"} else role if role in {"barber", "stylist"} else "user",
+                "role": role if role in {"barber", "stylist"} else "user",
                 "auth_provider": "google",
             }
         )
@@ -305,7 +316,18 @@ class AppleCallbackView(APIView):
         if not id_token:
             return Response("Failed to get ID token", status=status.HTTP_400_BAD_REQUEST)
 
-        payload = jwt.decode(id_token, options={"verify_signature": False})
+        # SECURITY FIX: Verify Apple ID token signature with Apple JWKS (RS256)
+        try:
+            payload = verify_apple_id_token(id_token, audience=settings.APPLE_CLIENT_ID)
+        except jwt.InvalidTokenError as exc:
+            security_logger.warning("Invalid Apple ID token: %s", exc)
+            return Response({"error": "Invalid Apple token"}, status=status.HTTP_401_UNAUTHORIZED)
+        except serializers.ValidationError as exc:
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:
+            security_logger.error("Apple token verification failed: %s", exp)
+            return Response({"error": "Apple token verification failed"}, status=status.HTTP_401_UNAUTHORIZED)
+
         email = payload.get("email")
         sub = payload.get("sub")
         if not email or not sub:
