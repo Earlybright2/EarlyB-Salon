@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { useCart } from "@/hooks/useCart";
 import { useWishlist } from "@/hooks/useWishlist";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   ShoppingBag,
   Heart,
@@ -159,6 +160,8 @@ export default function Navigation() {
             <button className="hidden md:flex p-2 text-ebs-text-secondary hover:text-ebs-gold transition-colors">
               <Search className="h-5 w-5" />
             </button>
+
+            <ThemeToggle />
 
             <button
               onClick={() => setIsWishlistOpen(true)}
@@ -340,6 +343,10 @@ export default function Navigation() {
                     )}
                   </div>
                   <div className="p-6 border-t border-white/5">
+                    <div className="flex items-center gap-3 mb-4">
+                      <ThemeToggle />
+                      <span className="text-xs text-ebs-text-muted">Theme</span>
+                    </div>
                     {isAuthenticated ? (
                       <div className="flex items-center gap-3">
                         {user?.avatar ? (
