@@ -14,16 +14,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('dark');
   const [isClient, setIsClient] = useState(false);
 
-  // Initialize theme from localStorage on mount
-  useEffect(() => {
-    setIsClient(true);
-    const savedTheme = localStorage.getItem('theme') as Theme | null;
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const initialTheme = savedTheme || (prefersDark ? 'dark' : 'dark');
-    setThemeState(initialTheme);
-    applyTheme(initialTheme);
-  }, []);
-
   // Apply theme to DOM
   const applyTheme = (newTheme: Theme) => {
     const html = document.documentElement;
@@ -36,6 +26,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
     localStorage.setItem('theme', newTheme);
   };
+
+  // Initialize theme from localStorage on mount
+  useEffect(() => {
+    setIsClient(true);
+    const savedTheme = localStorage.getItem('theme') as Theme | null;
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const initialTheme = savedTheme || (prefersDark ? 'dark' : 'dark');
+    setThemeState(initialTheme);
+    applyTheme(initialTheme);
+  }, []);
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
